@@ -1,0 +1,210 @@
+# 내일배움캠프 240426 TIL
+Java 5일차
+조건문(switch문), 반복문(for, while, do-while) 코드카타
+---------------------------------------------
+w14 ~
+
+// switch, if 비교
+ // if vs switch
+ // switch 문 실습코드를 if 문으로 바꿔보겠습니다.
+
+ // switch
+ int month = 8;
+ String monthString = "";
+ switch (month) {
+     case 1:  monthString = "1월";
+              break;
+     case 2:  monthString = "2월";
+              break;
+     case 3:  monthString = "3월";
+              break;
+     case 4:  monthString = "4월";
+              break;
+     case 5:  monthString = "5월";
+              break;
+     case 6:  monthString = "6월";
+              break;
+     case 7:  monthString = "7월";
+              break;
+     case 8:  monthString = "8월";
+              break;
+     case 9:  monthString = "9월";
+              break;
+     case 10: monthString = "10월";
+              break;
+     case 11: monthString = "11월";
+              break;
+     case 12: monthString = "12월";
+              break;
+     default: monthString = "알수 없음";
+ }
+ System.out.println(monthString); // 8월 출력
+
+ // if 로 변환
+ if (month == 1) {
+ 	monthString = "1월";
+ } else if (month == 2) {
+ 	monthString = "2월";
+ } else if (month == 3) {
+ 	monthString = "3월";
+ } else if (month == 4) {
+ 	monthString = "4월";
+ } else if (month == 5) {
+ 	monthString = "5월";
+ } else if (month == 6) {
+ 	monthString = "6월";
+ } else if (month == 7) {
+ 	monthString = "7월";
+ } else if (month == 8) {
+ 	monthString = "8월";
+ } else if (month == 9) {
+ 	monthString = "9월";
+ } else if (month == 10) {
+ 	monthString = "10월";
+ } else if (month == 11) {
+ 	monthString = "11월";
+ } else if (month == 12) {
+ 	monthString = "12월";
+ } else {
+ 	monthString = "알수 없음";
+ }
+ System.out.println(monthString); // 8월 출력
+
+===================================================================================
+
+// for문
+       // (초기값 ; 조건문 ; 증가연산)
+       for (int i=0; i<4; i++){
+           System.out.println(i + "번째 출력!");
+       }
+       실행하면
+       //0번째 출력!
+       //1번째 출력!
+       //2번째 출력!
+       //3번째 출력!
+
+
+
+       // 향상된 for문
+       // 기존 : for문 안에 3개의 표현이 들어감 -> (초기값 ; 조건문 ; 증가연산)
+       // 향상된 for문 : 2개로 줄여줌
+       int[] numbers = {3, 6, 9, 12, 15};
+       for (int number : numbers) {
+           System.out.print(number + " ");
+           실행하면
+           // 3 6 9 12 15
+
+===================================================================================
+
+// do~while, break, continue
+
+int number = 0;
+//
+//        // ~하는 동안
+//        while (number < 3) {  // number < 3 인 동안 ~~
+//            number++;
+//            System.out.println(number+"출력!");
+//        }
+
+//        // do ~ while
+//        int number = 4;
+//        do {
+//            // 이 로직을 먼저 수행하겠다!!
+//            System.out.println(number + " 출력!");
+//        } while (number < 3);
+
+        // break (깨부수다)
+        // 가장 가까운 블록의 for문 또는 while, switch문을 중단!
+//        int number = 0;
+//        while (number < 3) {
+//            number++;
+//            if (number == 2) {
+//                break;
+//            }
+//            System.out.println(number + " 출력!!");
+//        }
+
+//        for (int i = 0; i < 10; i++) {
+//            System.out.println("i: " + i);
+//            if (i == 2){
+//                break; // i가 2일 때, 가장 바깥 반복문이 종료
+//            }
+//            for (int i = 0; j < 10; j++){
+//                System.out.println("j: " + j);
+//                if (i == 2){
+//                    break; // j가 2일 때, 안쪽 반복문이 종료
+//                }
+//            }
+//        }
+        // continue (계속하다)
+        int number = 0;
+        while (number < 3) {
+            number++; //3
+            if (number == 2) {
+                continue;
+            }
+            System.out.println(number + "출력!");
+
+===================================================================================
+
+오늘의 코드카타 문제는
+두 수의 합, 두 수의 나눗셈
+먼저 두 수의 합이다
+
+
+문제 설명
+정수 num1과 num2가 주어질 때, num1과 num2의 합을 return하도록 soltuion 함수를 완성해주세요.
+
+입출력 예 설명
+입출력 예 #1
+num1이 2이고 num2가 3이므로 2 + 3 = 5를 return합니다.
+입출력 예 #2
+num1이 100이고 num2가 2이므로 100 + 2 = 102를 return합니다.
+
+이전에 풀었던 문제들이랑 거의 유사하기에 보자마자 바로 풀었다
+
+정답코드
+class Solution {
+    public int solution(int num1, int num2) {
+        int answer = (num1 + num2);
+        return answer;
+    }
+}
+
+입출력 예 1번과 2번 동일하게 num1 + num2 = return 이라 위와 같은 코드가 나온다
+
+다음 문제
+두 수의 나눗셈
+
+문제 설명
+정수 num1과 num2가 매개변수로 주어질 때, num1을 num2로 나눈 값에 1,000을 곱한 후 정수 부분을 return 하도록 soltuion 함수를 완성해주세요.
+입출력 예 #1
+num1이 3, num2가 2이므로 3 / 2 = 1.5에 1,000을 곱하면 1500이 됩니다.
+입출력 예 #2
+num1이 7, num2가 3이므로 7 / 3 = 2.33333...에 1,000을 곱하면 2333.3333.... 이 되며, 정수 부분은 2333입니다.
+입출력 예 #3
+num1이 1, num2가 16이므로 1 / 16 = 0.0625에 1,000을 곱하면 62.5가 되며, 정수 부분은 62입니다.
+
+이건 좀 어려웠다...
+풀어보자면
+
+입출력 예 3개가 공통적으로 / 나누니까 num1 / num2
+그다음 나눈 값의 소수점까지 해서 1000을 곱해야하니까 실수형 변수가 들어가야한다 실수형 변수엔 float, double 두가지가 있다.
+입출력 예 2번에서 소수점이 2.33333... 무한인거 같으니 float, double중에 더 큰 double을 쓰면 되지 않을까?..라고 생각해서 써보자면
+입출력 예 2번으로 코드를 써보자 num1 / num2 = (double 변수) 이니까
+double answer = num1 / num2
+int answer1 = answer * 1000
+이렇게 써보면 어떨까 해서 써보았지만 안된다... 뭐가 문제인지 모르겠다
+결국 지피티의 힘을 빌려 정답 완성 후 제출 ㅠ
+
+정답 코드
+class Solution {
+    public int solution(int num1, int num2) {
+        int answer = (int) ((double) num1 / num2 * 1000);
+        return answer;
+    }
+}
+지피티의 힘을 빌리기전 이렇게 한줄로도 짜보았지만 안되던데 int, double 확실하게 구분을 안줘서 그런거가 싶다
+어쨋든 식은 맞췄으니 70%는 혼자서 해결한 걸로
+
+
