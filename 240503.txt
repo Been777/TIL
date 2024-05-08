@@ -1,0 +1,76 @@
+# 내일배움캠프 240503 TIL
+Java 9일차
+얕은 복사, 깊은 복사, string 배열
+---------------------------------------------
+
+// 얕은 복사
+        int[] a = {1, 2, 3, 4, 5};
+        int[] b = a; // 얕은 복사
+
+        b[0] = 3; // b 배열의 0번째 순번값을 3으로 수정함
+        // b는 a의 얕은 복사로 가져오니 a값도 수정됨
+        // 수정 전 a = {1, 2, 3, 4, 5};
+        // 수정 후 a = {3, 2, 3, 4, 5};
+        // 이런식으로 b의 값을 수정하였지만 b가 얕은 복사로 가져와 a의 0번째 값도 수정됨
+
+        System.out.println(a[0]);
+
+
+// 깊은 복사
+// 2. Arrays.copyOf() 메서드
+        int[] a = {1,2,3,4,5};
+        int[] b = Arrays.copyOf(a, a.length); // 배열과 함께 length값도 같이 넣어줍니다.
+
+        a[3] = 0;
+        System.out.println(a[3]);
+        System.out.println(b[3]);
+
+
+// 문자(char / 1byte), 문자열(String)
+      // String = char[]
+
+      // 기본형 변수 vs 참조형 변수
+      // 1. 기본형 변수는 '소문자로 시작함' 반면, 참조형 변수는 '대문자로 시작함'
+      // - Wrapper class에서 기본형 변수를 감싸줄 때(boxing), int -> Integer
+      // 2. 기본형 변수는 값 자체를 저장, 참조형 변수는 별도의 공간에 값을 저장 후 그 주소를 저장함(= 주소형 변수)
+
+      // char < String(훨씬 더 많이 사용)
+      // String이 가지고 있는 기능이 상당히 많아서 사용
+      // Wrapper class와도 상당히 비슷 -> 기본형 변수가 가지고 있는 기능이 제한 -> 다양한 기능을 제공하는 Wrapper을 감쌈으로써, 추가기능을 더함
+
+      // String 기능 활용 예시
+      String str = "ABCD";
+
+      // (1) length
+      int strlength = str.length(); // 'str'.length 무엇이냐 String 'str' = "ABCD"; 길이다
+      System.out.println(strlength); // int형이니까 String str = "ABCD"에서 abcd가 4개니까 4가 출력된다
+
+      // (2) charAt(int index)
+      char strChar = str.charAt(1);
+      System.out.println(strChar); // String str = "ABCD" 여기서 str.charAt(1); 1번째 B가 출력된다
+      // 왜 A가 아니라 B냐 컴퓨터 언어 순번은 0부터 시작이다 예시로 문자순으로는 "ABCD" 숫자로는 "0123"이 된다
+
+      // (3) substring(int fromIdx, int toIdx)
+      String strSub = str.substring(0, 3);
+      System.out.println(strSub); // ABC 출력
+      // 0~2순번까지 자르기 합니다. (3순번은 제외 3순번인 D는 제외된단 말)
+
+      // (4) equals(String str)
+      String newStr = "ABCD";  // str 값과 같은 문자열 생성
+      boolean strEqual = newStr.equals(str);
+      System.out.println(strEqual); // true 출력
+      // String newStr = "ABCD" 여기서 ABCE로 바꾸면 false로 출력됨
+      // 위에 선언한 9번째줄 String str = "ABCD"; 이거랑
+      // String newStr = "ABCD"; 이거랑
+      // 같으면 true 다르면 false
+
+      // (5) toCharArray()
+      char[] strCharArray = str.toCharArray(); // String 을 char[] 로 변환
+
+      // (6) 반대로 char[] 를 String로 변환하는 방법
+      char[] charArray = {'A', 'B', 'C'};
+      String charArrayString = new String(charArray); // char[] 를 String 으로 변환
+      System.out.println(charArray);
+      System.out.println(charArrayString);
+
+      // char = ' '    String = " "
