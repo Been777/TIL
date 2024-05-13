@@ -1,0 +1,104 @@
+# 내일배움캠프 240513 TIL
+Java 19일차
+개인 숙제, Spring 시작
+--------------------------------------------
+
+자바의 정석 기초편 연습문제 개인 숙제 시작.
+Chapter 6
+객체지향 프로그래밍
+
+============================================================
+[6-1] 다음과 같은 멤버변수를 갖는 SutdaCard클래스를 정의하시오.
+타입
+1. int
+2. boolean
+
+변수명
+1. num
+2. isKwang
+
+설명
+1. 광(光)이면 true, 아니면 false
+2. 카드의 숫자.(1~10사이의 정수)
+============================================================
+
+풀어봄
+int = num
+boolean = isKwang
+
+정답코드
+public class SutdaCard {
+	int num;
+	boolean isKwang;
+}
+타입, 변수명은 알겠는데 설명에서 헷갈렸다
+정답코드를 보았을 때, 설명은 단지 타입에 대한 설명인거 같다
+
+============================================================
+[6-2] 문제6-1에서 정의한 SutdaCard클래스에 두 개의 생성자와 info()를 추가해서 실행 결과와 같은 결과를 얻도록 하시오.
+[연습문제]/ch6/Exercise6_2.java
+
+class Exercise6_2 {
+    public static void main(String args[]) {
+        SutdaCard card1 = new SutdaCard(3, false);
+        SutdaCard card2 = new SutdaCard();
+        System.out.println(card1.info());
+        System.out.println(card2.info());
+    }
+}
+
+class SutdaCard {
+    /*
+    (1) 알맞은 코드를 넣어 완성하시오.
+    */
+}
+
+[실행결과]
+3
+1K
+============================================================
+
+정답코드
+(1)
+int num;
+boolean isKwang;
+
+public SutdaCard(){
+	this(1, true); //SutdaCard(1,true)를 호출한다.
+}
+
+public SutdaCard(int num, boolean isKwang){
+	this.num = num;
+	this.isKwang = isKwang;
+}
+
+public String info(){
+	return num + (isKwang ? "K" : "");
+}
+============================================================
+
+
+Spring 학습 준비
+
+## 그레이들(Gradle)이란 무엇일까?
+- Gradle이란?
+    - Gradle은 빌드 자동화 시스템입니다.
+    - 우리가 작성한 Java 코드를 설정에 맞게 자동으로 Build해 줍니다.
+        - Build란 소스 코드를 실행 가능한 결과물로 만드는 일련의 과정을 뜻합니다.
+        - Gradle을 사용하면 간편하게 Java 소스 코드를 실행한 가능한 jar 파일로 만들어줍니다.
+
+- build.gradle
+    - build.gradle은 Gradle 기반의 빌드 스크립트입니다.
+    - 이 스크립트를 작성하면 소스 코드를 빌드하고 라이브러리들의 의존성을 쉽게 관리할 수 있습니다.
+    - groovy 혹은 kotlin 언어로 스크립트를 작성할 수 있습니다.
+    - 우리가 개발을 하면서 필요로하는 외부 라이브러리들을 dependencies 부분에 작성하면 Gradle이 해당 라이브러리들을 [Maven Repository](https://mvnrepository.com/) 와 같은 외부 저장소에서 자동으로 다운로드해옵니다.
+        - Maven Repository는 라이브러리들을 모아둔 저장소 입니다
+    - 또한 다른 라이브러리들과의 의존성을 자동으로 관리해 주기 때문에 라이브러리들간의 충돌 걱정없이 개발에만 집중할 수 있습니다.
+        - 라이브러리란 필요한 기능들이 모여있는 코드의 묶음이라 생각하시면 됩니다.
+        - 개발자들은 모든 기능을 전부 직접 구현하지 않고 미리 작성되어있는 라이브러리들을 사용하여 기능을 빠르고 쉽게 구현할 수 있습니다.
+    - SpringBoot의 버전을 변경하고 싶다면 ‘3.1.0’ 부분을 원하는 버전으로 수정하시면 됩니다.
+    - 강의 제작 시점과 강의 수강 시점에 차이가 클 수록 버전의 차이가 클 수 있습니다.
+        - 강의 수강 시점의 최신 버전을 사용하여 진행하다 문제가 발생한다면 버전의 차이가 커서 발생하는 문제일 수 있기 때문에 문제 발생 시 우선 강의와 버전을 동일하게 맞춰서 진행하시는게 좋습니다.
+    - 위와 같이 필요로하는 라이브러리를 추가해주면 코끼리 모양의 표시가 생성되고 해당 표시를 클릭하면 추가된 라이브러리를 다운로드해옵니다.
+        - [Maven Repository](https://mvnrepository.com/) 사이트에 접속해 필요한 라이브러리를 검색하여 사용하면됩니다.
+    - External Libraries에서 Gradle이 다운로드해온 라이브러리들을 확인할 수 있습니다.
