@@ -1,0 +1,172 @@
+# 내일배움캠프 240509 TIL
+Java 15일차
+팀과제, this와 this(), 접근 제어자, package와 import 이해하기
+---------------------------------------------
+
+
+- his
+    📌 this는 객체 즉, 인스턴스 자신을 표현하는 키워드입니다.
+
+    - 객체 내부 생성자 및 메서드에서 객체 내부 멤버에 접근하기 위해 사용될 수 있습니다.
+    - 객체 내부 멤버에 접근할 때 this 키워드가 필수는 아니지만 상황에 따라 필수가 될 수 있습니다.
+
+        public Car(String model, String color, double price) {
+            model = model;
+            color = color;
+            price = price;
+        }
+
+        - 만약 이처럼 생성자를 선언하는데 매개변수명과 객체의 필드명이 동일할 경우 오류가 발생하지는 않지만 생성자 블록 내부에서 해당 변수들은 객체의 필드가 아닌 가장 가까운 매개변수명을 가리키게 됨으로 자기 자신에게 값을 대입하는 상황이 되어 버립니다.
+        - 이럴 경우에 this 키워드를 사용하면 해결할 수 있습니다.
+
+            public Car(String model, String color, double price) {
+                this.model = model;
+                this.color = color;
+                this.price = price;
+            }
+
+            - this 키워드를 통해 변수명에 해당하는 객체의 필드에 접근하여 받아온 매개변수의 매개값을 객체의 필드에 대입하여 저장할 수 있습니다.
+    - 또한 this는 인스턴스 자신을 뜻하기 때문에 객체의 메서드에서 리턴 타입이 인스턴스 자신의 클래스 타입이라면 this를 사용하여 인스턴스 자신의 주소를 반환할 수도 있습니다.
+
+        Car returnInstance() {
+            return this;
+        }
+-
+
+- this()
+
+    <aside>
+    📌 this(…)는 객체 즉, 인스턴스 자신의 생성자를 호출하는 키워드입니다.
+
+    - 객체 내부 생성자 및 메서드에서 해당 객체의 생성자를 호출하기 위해 사용될 수 있습니다.
+    - 생성자를 통해 객체의 필드를 초기화할 때 중복되는 코드를 줄여줄 수 있습니다.
+
+        public Car(String model) {
+            this.model = model;
+            this.color = "Blue";
+            this.price = 50000000;
+        }
+
+        public Car(String model, String color) {
+            this.model = model;
+            this.color = color;
+            this.price = 50000000;
+        }
+
+        public Car(String model, String color, double price) {
+            this.model = model;
+            this.color = color;
+            this.price = price;
+        }
+
+        - 이렇게 생성자를 선언한다고 했을 때 코드의 중복이 발생합니다.
+        - 이때 this() 키워드를 사용하면 코드의 중복을 제거할 수 있습니다.
+
+        public Car(String model) {
+            this(model, "Blue", 50000000);
+        }
+
+        public Car(String model, String color) {
+            this(model, color, 100000000);
+        }
+
+        public Car(String model, String color, double price) {
+            this.model = model;
+            this.color = color;
+            this.price = price;
+        }
+
+    ⚠️ 여기서 주의할 점이 있습니다!
+
+    - this() 키워드를 사용해서 다른 생성자를 호출할 때는 반드시 해당 생성자의 첫 줄에 작성되어야 합니다.
+
+    public Car(String model) {
+        System.out.println("model = " + model);
+        this(model, "Blue", 50000000);
+    }
+    - 이처럼 this() 키워드로 다른 생성자 호출 이전에 코드가 존재하면 오류가 발생합니다.
+
+
+## 접근 제어자
+
+📌 제어자는 클래스, 변수, 메서드의 선언부에 사용되어 부가적인 의미를 부여해 줍니다.
+
+- 접근 제어자 : `public`, `protected`, `default`, `private`
+- 그 외 제어자 : `static`, `final`, `abstract`
+
+❗️ 하나의 대상에 여러 개의 제어자를 조합해서 사용할 수 있으나, 접근 제어자는 단 하나만 사용할 수 있습니다.
+
+- 근 제어자
+    📌 멤버 또는 클래스에 사용, 외부에서 접근하지 못하도록 제한합니다.
+    - 클래스, 멤버 변수, 메서드, 생성자에 사용되고, 지정되어 있지 않다면 default입니다.
+        - `public` : 접근 제한이 전혀 없습니다.
+        - `protected` : 같은 패키지 내에서, 다른 패키지의 자손 클래스에서 접근이 가능합니다
+        - `default` : 같은 패키지 내에서만 접근이 가능합니다.
+        - `private` : 같은 클래스 내에서만 접근이 가능합니다.
+
+    - 사용 가능한 접근 제어자
+        - 클래스 : `public`, `default`
+        - 메서드 & 멤버 변수 : `public`, `protected`, `default`, `private`
+        - 지역변수 : 없음
+
+- 접근 제어자를 이용한 캡슐화 (은닉성)
+    - 접근제어자는 클래스 내부에 선언된 데이터를 보호하기 위해서 사용합니다.
+    - 유효한 값을 유지하도록, 함부로 변경하지 못하도록 접근을 제한하는 것이 필요합니다.
+- 생성자의 접근 제어자
+    - 생성자에 접근 제어자를 사용함으로 인스턴스의 생성을 제한할 수 있습니다.
+    - 일반적으로 생성자의 접근 제어자는 클래스의 접근 제어자와 일치합니다.
+
+- Getter 와 Setter
+    📌 객체의 무결성 즉, 변경이 없는 상태를 유지하기 위해 접근 제어자를 사용합니다.
+
+    - 이때 외부에서 필드에 직접 접근하는 것을 막기 위해 필드에 private, default 등의 접근 제어자를 사용할 수 있습니다.
+    - 그렇다면 우리는 어떻게 객체의 private 필드를 읽어오거나 저장할 수 있을까요?
+    - 우리는 Getter 와 Setter를 사용하여 이를 해결할 수 있습니다.
+
+Getter
+📌 외부에서 객체의 private 한 필드를 읽을 필요가 있을 때 Getter 메서드를 사용합니다.
+private double speed;  // 자동차 속도 , km/h
+private char gear = 'P'; // 기어의 상태, P,R,N,D
+private boolean lights; // 자동차 조명의 상태
+
+- 메서드 이름의 규칙은 : get + 필드 이름(첫 글자 대문자)입니다.
+- 사용하는 방법은 인스턴스 메서드 호출과 동일합니다.
+
+Setter
+📌 외부에서 객체의 private 한 필드를 저장/수정할 필요가 있을 때 Setter 메서드를 사용합니다.
+private double speed;  // 자동차 속도 , km/h
+private char gear = 'P'; // 기어의 상태, P,R,N,D
+private boolean lights; // 자동차 조명의 상태
+- 메서드 이름의 규칙은 : set + 필드 이름(첫 글자 대문자)입니다.
+- 사용하는 방법은 인스턴스 메서드 호출과 동일합니다.
+
+- 제어자의 조합
+    - 사용 가능한 제어자
+        - 클래스 : `public`, `default`, `final`, `abstract`
+        - 메서드 : `public`, `protected`, `default`, `private`, `final`, `abstract`, `static`
+        - 멤버 변수 : `public`, `protected`, `default`, `private`, `final`, `static`
+        - 지역변수 : `final`
+
+    ⚠️ **제어자 사용 시 주의 사항**
+    - 메서드에 `static`과 `abstract`를 함께 사용할 수 없다.
+    - 클래스에 `abstract`와 `final`을 동시에 사용할 수 없다.
+    - `abstract`메서드의 접근 제어자가 `private`일 수 없다.
+    - 메서드에 `private`와 `final`을 같이 사용할 필요는 없다.
+
+
+## package와 import 이해하기
+
+- 패키지란?
+    📌 패키지란 클래스의 일부분이면서 클래스를 식별해 주는 용도입니다.
+    - 패키지는 상위 패키지와 하위 패키지를 도트(.)로 구분합니다.
+    - `package 상위 패키지.하위 패키지;` 이렇게 선언할 수 있습니다.
+    - 예를 들어 `oop.pk1`이라는 패키지와 `oop.pk2`라는 패키지가 있다고 가정해 보겠습니다.
+        - 두 패키지에 모두 Car 클래스가 존재한다면? 그리고 이를 사용하려고 한다면?
+        - Java는 패키지의 경로를 통해 이를 구분합니다.
+
+- import란?
+    📌 import는 다른 패키지에 있는 클래스를 사용하기 위해 명시하는 키워드입니다.
+    - 위에서 살펴본 `oop.pk1`이라는 패키지와 `oop.pk2`라는 패키지를 import로 명시해 보겠습니다.
+        - `import oop.pk1.Car;`, `import oop.pk2.Car;`
+    - 클래스 이름을 생략하고 *를 사용하여 `import oop.pk1.*;` 이렇게 표현하면 `oop.pk1` 패키지 아래에 있는 모든 클래스를 사용할 수 있습니다.
+    - 다만 서로 다른 패키지에 있는 같은 이름의 클래스를 동시에 사용하려면 해당 클래스에 패키지 명을 전부 명시해야 합니다.
