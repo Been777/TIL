@@ -1,0 +1,65 @@
+# 내일배움캠프 240515 TIL
+Java 21일차
+개인 과제, ㅍㅣ드백
+----------------------------------------------------------------------------------------
+
+개인과제 깃허브
+https://github.com/Been777/Project-2
+
+피드백 노션
+https://sghwang.notion.site/cf8d07d8c6674132a7224677dc4bd4c4
+
+# 피드백
+
+<aside>
+💡 DB 연동이 안된 것은 아쉽지만, 그래도 Map으로 대체해서 잘 구현하셨습니다.
+package 분리는 목적에 맞게 잘 되어 있습니다.
+
+</aside>
+
+## Entity
+
+- id를 증가시키기 위해 static 필드를 잘 이용하셨습니다.
+
+## Controller
+
+- 컨트롤러의 URI path가 모두 “`/api/schedule`”로 시작하므로 controller 위의 `@RequestMapping(“/api/schedule”)`으로 수정되어도 무방할 것 같습니다.
+    - 이것은 `@RequestMapping` 설명이 목적이므로 참고만 해주세요!
+- DB에 해당하는 Map을 별도의 클래스에 담아서 따로 분리하면 좀 더 결합도가 낮은 설계가 될 수 있을 것 같습니다!
+- request로 받은 password를 비교할 때는 null 체크도 같이 하는 것이 안전합니다
+    - `ScheduleRequestDto` 클래스에서 password가 null이 될 수 있기 때문입니다.
+        - 기존 코드
+
+            ```java
+                @PutMapping("/schedule/{id}") // 선택한 일정 수정
+                public Long updateSchedule(@PathVariable Long id, @RequestBody ScheduleRequestDto requestDto) {
+                    if (scheduleList.containsKey(id)) {
+                        Schedule schedule = scheduleList.get(id);
+                        if (!requestDto.getPassword().equals(schedule.getPassword())) {
+                            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+                        }
+                        schedule.update(requestDto);
+                        return schedule.getId();
+                    } else {
+                        throw new IllegalArgumentException("선택한 일정은 존재하지 않습니다.");
+                    }
+                }
+            ```
+
+        - 변경한 코드
+
+            ```java
+                @PutMapping("/schedule/{id}") // 선택한 일정 수정
+                public Long updateSchedule(@PathVariable Long id, @RequestBody ScheduleRequestDto requestDto) {
+                    if (scheduleList.containsKey(id)) {
+                        Schedule schedule = scheduleList.get(id);
+                        if (!Objects.equals(requestDto.getPassword(), schedule.getPassword())) {
+                            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+                        }
+                        schedule.update(requestDto);
+                        return schedule.getId();
+                    } else {
+                        throw new IllegalArgumentException("선택한 일정은 존재하지 않습니다.");
+                    }
+                }
+            ```
