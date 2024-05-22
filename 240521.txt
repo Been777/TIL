@@ -1,0 +1,195 @@
+# 내일배움캠프 240521 TIL
+Java 24일차
+자바의 정석 6, 7
+-------------------------------------------------------------------------------
+
+
+문제 : [7-1] 섯다카드 20장을 포함하는 섯다카드 한 벌(SutdaDeck클래스)을 정의한 것이다. 섯다카드 20장을 담는 SutdaCard배열을 초기화하시오.
+단, 섯다카드는 1부터 10까지의 숫자 가 적힌 카드가 한 쌍씩 있고,
+숫자가 1, 3, 8인 경우에는 둘 중의 한 장은 광(Kwang)이 어야 한다.
+즉, SutdaCard의 인스턴스변수 isKwang의 값이 true이어야 한다.
+
+예제 :
+class SutdaDeck {
+	final int CARD_NUM = 20;
+	SutdaCard[] cards = new SutdaCard[CARD_NUM];
+
+	SutdaDeck() {
+		/*
+		 * (1) 배열 SutdaCard를 적절히 초기화 하시오.
+		 */
+		for(int i=0; i<cards.length; i++) {
+			SutdaCard card = new SutdaCard(num);
+		}
+	}
+}
+
+class SutdaCard {
+	int num;
+	boolean isKwang;
+
+	SutdaCard() {
+		this(1, true);
+	}
+
+	SutdaCard(int num, boolean isKwang)
+		{ this.num = num;
+		this.isKwang = isKwang;
+	}
+
+	// info()대신 Object클래스의 toString()을 오버라이딩했다.
+	public String toString() {
+	return num+(isKwang?"K":"");
+	}
+}
+
+class S_Exercise7_1 {
+	public static void main(String args[]) {
+		SutdaDeck deck = new SutdaDeck();
+
+		for (int i = 0; i < deck.cards.length; i++)
+			System.out.print(deck.cards[i] + ",");
+	}
+}
+
+
+
+모범답안 :
+SutdaDeck() {
+for(int i=0;i < cards.length;i++) { int num = i%10+1;
+boolean isKwang = (i < 10)&&(num==1||num==3||num==8); //✔️
+
+cards[i] = new SutdaCard(num,isKwang);
+}
+}
+
+
+
+
+[7-2] 문제7-1의 SutdaDeck클래스에 다음에 정의된 새로운 메서드를 추가하고 테스트 하시오.
+[주의] Math.random()을 사용하는 경우 실행결과와 다를 수 있음.
+
+메서드명 : shuffle
+기 능 : 배열 cards에 담긴 카드의 위치를 뒤섞는다.(Math.random()사용) 반환타입 : 없음
+매개변수 : 없음
+메서드명 : pick
+기 능 : 배열 cards에서 지정된 위치의 SutdaCard를 반환한다.
+반환타입 : SutdaCard
+매개변수 : int index - 위치
+메서드명 : pick
+기 능 : 배열 cards에서 임의의 위치의 SutdaCard를 반환한다.(Math.random()사용)
+반환타입 : SutdaCard 매개변수 : 없음
+
+class SutdaDeck2 {
+	final int CARD_NUM = 20;
+	SutdaCard2[] cards = new SutdaCard2[CARD_NUM];
+
+	SutdaDeck2() {
+		for(int i=0;i < cards.length;i++) { int num = i%10+1;
+		boolean isKwang = (i < 10)&&(num==1||num==3||num==8); //✔️
+
+		cards[i] = new SutdaCard2(num,isKwang);
+		}
+	}
+
+	/*🔥
+	 * (1) 위에 정의된 세 개의 메서드를 작성하시오.
+	 *🔥/
+} // SutdaDeck
+
+class SutdaCard2 {
+	int num;
+	boolean isKwang;
+
+	SutdaCard2() {
+		this(1, true);
+	}
+
+	SutdaCard2(int num, boolean isKwang) {
+		this.num = num;
+		this.isKwang = isKwang;
+	}
+
+	public String toString() {
+		return num + (isKwang ? "K" : "");
+	}
+}
+
+class Exercise7_2 {
+	public static void main(String args[]) {
+		SutdaDeck2 deck = new SutdaDeck2();
+
+		System.out.println(deck.pick(0));
+		System.out.println(deck.pick());
+		deck.shuffle();
+
+		for (int i = 0; i < deck.cards.length; i++)
+			System.out.print(deck.cards[i] + ",");
+
+		System.out.println();
+		System.out.println(deck.pick(0));
+	}
+}
+
+모범답안:
+void shuffle() {
+for(int i=0; i<cards.length;i++) {
+int j = (int)(Math.random()*cards.length);
+
+// cards[i]와 cards[j]의 값을 서로 바꾼다.
+SutdaCard tmp = cards[i];
+cards[i] = cards[j];
+cards[j] = tmp;
+}
+}
+
+SutdaCard pick(int index) {
+if(index < 0 || index >= CARD_NUM) // ✔️✔️index의 유효성을 검사한다. return null;
+return cards[index];
+}
+SutdaCard pick() {
+int index = (int)(Math.random()*cards.length);
+return pick(index); // ✔️✔️pick(int index)를 호출한다.
+}
+
+
+
+
+[6-5] 다음과 같은 실행결과를 얻도록 Student클래스에 생성자와 info()를 추가하시오.
+class Exercise6_5 {
+	public static void main(String args[]) {
+		Student s = new Student("홍길동",1,1,100,60,76);
+		System.out.println(s.info());
+	}
+}
+
+class Student {
+	/* 알맞은 코드를 넣어 완성하시오 (1) . */
+}
+
+[실행결과]
+홍길동,1,1,100,60,76,236,78.8
+
+
+모범답안:
+public Student(String name, int ban, int no, int kor, int eng, int math) {
+	super();
+	this.name = name;
+	this.ban = ban;
+	this.no = no;
+	this.kor = kor;
+	this.eng = eng;
+	this.math = math;
+}
+
+public String info() {
+	return name + "," + ban + "," + no + "," + kor + "," + eng + "," + math+ "," + getTotal() + "," + getAverage();
+
+}
+
+
+
+
+
+
+
