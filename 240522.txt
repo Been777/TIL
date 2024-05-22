@@ -1,0 +1,1151 @@
+# 내일배움캠프 240522 TIL
+Java 25일차
+JPA CORE(~9)
+-------------------------------------------------------------------------------
+
+
+## JPA란 무엇일까?
+- DB를 직접 다룰 때의 문제점
+    ### 1. 애플리케이션에서 아래 형태의 객체 데이터를 DB에 저장해서 관리해야한다면 어떻게 해야 할까요?
+    ```java
+    public class Memo {
+        private Long id;
+        private String username;
+        private String contents;
+    }
+
+    - 1) DB 테이블 만들기
+        ```sql
+        create table memo (
+               id bigint not null auto_increment,
+                contents varchar(500) not null,
+                username varchar(255) not null,
+                primary key (id)
+        );
+        ```
+        - 이처럼 직접 DB로 접속해서 SQL을 호출해야합니다.
+
+    - 2) 애플리케이션에서 SQL 작성
+        ```java
+        String sql = "INSERT INTO memo (username, contents) VALUES (?, ?)";
+        String sql = "SELECT * FROM memo";
+        ```
+
+    - 3) SQL을 JDBC를 사용해서 직접 실행해줘야 합니다.
+        ```java
+        jdbcTemplate.update(sql, "Robbie", "오늘 하루도 화이팅!");
+        jdbcTemplate.query(sql, ...);
+        ```
+
+    - 4) SQL 결과를 객체로 직접 만들어줘야 합니다.
+        ```java
+        @Override
+        public MemoResponseDto mapRow(ResultSet rs, int rowNum) throws SQLException {
+        		// SQL 의 결과로 받아온 Memo 데이터들을 MemoResponseDto 타입으로 변환해줄 메서드
+        		Long id = rs.getLong("id");
+        		String username = rs.getString("username");
+        		String contents = rs.getString("contents");
+        		return new MemoResponseDto(id, username, contents);
+        }
+        ```
+
+    ### 2. SQL 의존적이라 변경에 취약합니다
+    - 메모 데이터에 비밀번호를 추가해야 한다면 어떻게 될까요?
+    ```java
+    public class Memo {
+        private Long id;
+        private String username;
+        private String contents;
+
+    		// 비밀번호 추가
+    		private String password;
+    }
+
+    - 1) SQL을 직접 수정해야 합니다.
+        ```java
+        String sql = "INSERT INTO memo (username, contents, password) VALUES (?, ?, ?)";
+        ```
+
+    - 2) MemoResponseDto 객체에 값을 넣어주는 부분도 당연히 추가해줘야 합니다.
+        ```java
+        @Override
+        public MemoResponseDto mapRow(ResultSet rs, int rowNum) throws SQLException {
+        		// SQL 의 결과로 받아온 Memo 데이터들을 MemoResponseDto 타입으로 변환해줄 메서드
+        		Long id = rs.getLong("id");
+        		String username = rs.getString("username");
+        		String contents = rs.getString("contents");
+        		String password = rs.getString("password");
+        		return new MemoResponseDto(id, username, contents, password);
+        }
+        ```
+
+    📌 단순히 메모장에 비밀번호 하나 더 추가했는데 해야하는 일들이 엄청 많이 생겼습니다.
+    이처럼 ORM 이 없는 환경에서는 백엔드 개발자가 비즈니스 로직 개발보다,
+    SQL 작성 및 수정에 더 많은 노력을 들여야 했었습니다.
+
+- ORM이란?
+
+    💡 ORM : Object-Relational Mapping
+    Object : **"객체"**지향 언어 (자바, 파이썬)
+    Relational : **"관계형"** 데이터베이스 (H2, MySQL)
+    📌 반복적이고 번거로운 애플리케이션 단에서의 SQL 작업을 줄여주기 위해서 ORM(객체 관계 매핑)기술들이 등장 하게 됩니다.
+    - ORM은 이름 그대로 객체와 DB의 관계를 매핑 해주는 도구입니다.
+        - 객체 즉, 자바의 클래스와 DB의 데이터를 직접 매핑 하려면 앞서 살펴본 것 처럼 매우 번거롭고 많은 작업들이 필요했지만 ORM을 사용하면 이를 자동으로 처리해줍니다.
+
+- JPA란?
+    💡 JPA: Java Persistence API
+    자바 ORM 기술에 대한 표준 명세
+    - JPA는 Java ORM 기술의 대표적인 표준 명세입니다.
+    - JPA는 애플리케이션과 JDBC 사이에서 동작되고 있습니다.
+    - JPA를 사용하면 DB 연결 과정을 직접 개발하지 않아도 자동으로 처리해줍니다.
+    - 또한 객체를 통해 간접적으로 DB 데이터를 다룰 수 있기 때문에 매우 쉽게 DB 작업을 처리할 수 있습니다.
+
+    - 하이버네이트(Hibernate)란?
+        - JPA 는 표준 명세이고, 이를 실제 구현한 프레임워크 중 **사실상 표준**이 **하이버네이트**입니다.
+        - 스프링 부트에서는 기본적으로 ‘**하이버네이트’** 구현체를 사용 중입니다.
+        > 사실상 표준 (de facto, 디팩토)
+        보통 기업간 치열한 경쟁을 통해 시장에서 결정되는 비 공식적 표준이다
+
+## 07. Entity 이해하기
+- Entity란?
+    - JPA에서 관리되는 클래스 즉, 객체를 의미합니다.
+    - Entity 클래스는 DB의 테이블과 매핑되어 JPA에 의해 관리됩니다.
+
+- 프로젝트 생성
+    - 프로젝트 준비하기
+        1. IntelliJ를 실행합니다.
+        2. New Project를 클릭합니다.
+        3. 왼쪽 메뉴에서 "New Project”를 클릭하고 아래와 같이 설정합니다.
+        4.  🚒**[중요] 꼭 다음 사항을 확인해주세요.**
+            - Name: jpa-core
+            - **Language: Java**
+            - **Build system: Gradle**
+            - **JDK: 17**
+            - **Gradle DSL:** **Groovy**
+            - GroupId: com.sparta
+            - ArtifactId: jpa-core
+            - 프로젝트 경로(Location)는 자유롭게 설정하시면 됩니다.
+        5. Create를 클릭합니다.
+
+    - 프로젝트 설정추가
+        - src > main > resources > META-INF > persistence.xml
+            - [코드 스니펫] persistence.xml
+                ```xml
+                <?xml version="1.0" encoding="UTF-8"?>
+                <persistence version="2.2"
+                             xmlns="http://xmlns.jcp.org/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                             xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd">
+                    <persistence-unit name="memo">
+                        <class>com.sparta.entity.Memo</class>
+                        <properties>
+                            <property name="jakarta.persistence.jdbc.driver" value="com.mysql.cj.jdbc.Driver"/>
+                            <property name="jakarta.persistence.jdbc.user" value="root"/>
+                            <property name="jakarta.persistence.jdbc.password" value="{비밀번호}"/>
+                            <property name="jakarta.persistence.jdbc.url" value="jdbc:mysql://localhost:3306/memo"/>
+
+                            <property name="hibernate.hbm2ddl.auto" value="create" />
+
+                            <property name="hibernate.show_sql" value="true"/>
+                            <property name="hibernate.format_sql" value="true"/>
+                            <property name="hibernate.use_sql_comments" value="true"/>
+                        </properties>
+                    </persistence-unit>
+                </persistence>
+                ```
+
+        - build.gradle
+            - [코드 스니펫] build.gradle : JPA, MySQL 추가
+                ```groovy
+                // JPA 구현체인 hibernate
+                implementation 'org.hibernate:hibernate-core:6.1.7.Final'
+                // MySQL
+                implementation 'mysql:mysql-connector-java:8.0.28'
+                ```
+
+        - Intellij Database 연동
+            - CREATE DATABASE
+                ```sql
+                CREATE DATABASE memo;
+                ```
+
+            - 연동 순서
+                1. Database 탭을 클릭하시고 + 버튼을 누릅니다.
+                2. Data Source > MySQL 를 클릭합니다.
+                3. User, Password, Database 정보를 추가한 후 Ok를 클릭합니다.
+                4. MySQL Database에 연결이 완료되었습니다.
+
+        - EntityTest
+            - [코드 스니펫] EntityTest
+                ```java
+                import jakarta.persistence.EntityManager;
+                import jakarta.persistence.EntityManagerFactory;
+                import jakarta.persistence.Persistence;
+                import org.junit.jupiter.api.BeforeEach;
+                import org.junit.jupiter.api.Test;
+
+                public class EntityTest {
+
+                    EntityManagerFactory emf;
+                    EntityManager em;
+
+                    @BeforeEach
+                    void setUp() {
+                        emf = Persistence.createEntityManagerFactory("memo");
+                        em = emf.createEntityManager();
+                    }
+
+                    @Test
+                    void test1() {
+
+                    }
+                }
+                ```
+
+- Entity 클래스 만들기
+    - Memo Entity
+    ```java
+    @Entity // JPA가 관리할 수 있는 Entity 클래스 지정
+    @Table(name = "memo") // 매핑할 테이블의 이름을 지정
+    public class Memo {
+        @Id
+        private Long id;
+
+        // nullable: null 허용 여부
+        // unique: 중복 허용 여부 (false 일때 중복 허용)
+        @Column(name = "username", nullable = false, unique = true)
+        private String username;
+
+        // length: 컬럼 길이 지정
+        @Column(name = "contents", nullable = false, length = 500)
+        private String contents;
+    }
+    ```
+    - [코드 스니펫] Memo Entity
+
+        ```java
+        package com.sparta.entity;
+
+        import jakarta.persistence.Column;
+        import jakarta.persistence.Entity;
+        import jakarta.persistence.Id;
+        import jakarta.persistence.Table;
+
+        @Entity // JPA가 관리할 수 있는 Entity 클래스 지정
+        @Table(name = "memo") // 매핑할 테이블의 이름을 지정
+        public class Memo {
+            @Id
+            private Long id;
+
+            // nullable: null 허용 여부
+            // unique: 중복 허용 여부 (false 일때 중복 허용)
+            @Column(name = "username", nullable = false, unique = true)
+            private String username;
+
+            // length: 컬럼 길이 지정
+            @Column(name = "contents", nullable = false, length = 500)
+            private String contents;
+        }
+        ```
+
+    - SQL 확인
+        - create memo table
+            ```sql
+            create table memo (
+                   id bigint not null,
+                    contents varchar(500) not null,
+                    username varchar(255) not null,
+                    primary key (id)
+            );
+            ```
+        - alter username unique
+            ```sql
+            alter table memo
+                   add constraint username_UK unique (username);
+            ```
+
+    - **@Entity** : JPA가 관리할 수 있는 Entity 클래스로 지정할 수 있습니다.
+        - **@Entity(name = "Memo") :** Entity 클래스 이름을 지정할 수 있습니다. (default: 클래스명)
+        - JPA가 Entity 클래스를 인스턴스화 할 때 기본 생성자를 사용하기 때문에 반드시 현재 Entity 클래스에서 기본 생성자가 생성되고 있는지 확인해야 합니다.
+    - **@Table** : 매핑할 테이블을 지정해줍니다.
+        - **@Table(name = "memo") :** 매핑할 테이블의 이름을 지정할 수 있습니다. (default: Entity 명)
+    - **@Column** :
+        - **@Column(name = "username") :** 필드와 매핑할 ****테이블의 컬럼을 지정할 수 있습니다. (default: 객체의 필드명)
+        - **@Column(nullable =  false) :** 데이터의 null 값 허용 여부를 지정할 수 있습니다. (default: true)
+        - **@Column(unique = true) :** 데이터의 중복 값 허용 여부를 지정할 수 있습니다. (default: false)
+        - **@Column(length =  500) :** 데이터 값(문자)의 길이에 제약조건을 걸 수 있습니다. (default: 255)
+    - **@Id** : 테이블의 기본 키를 지정해줍니다.
+        - 이 기본 키는 영속성 컨텍스트에서 Entity를 구분하고 관리할 때 사용되는 식별자 역할을 수행합니다.
+            - 따라서 기본 키 즉, 식별자 값을 넣어주지 않고 저장하면 오류가 발생합니다.
+        - **@Id** 옵션만 설정하면 기본 키 값을 개발자가 직접 확인하고 넣어줘야 하는 불편함이 발생합니다.
+
+    - **@GeneratedValue** 옵션을 ****추가하면 기본 키 생성을 DB에 위임할 수 있습니다.
+        ```java
+        @Entity // JPA가 관리할 수 있는 Entity 클래스 지정
+        @Table(name = "memo") // 매핑할 테이블의 이름을 지정
+        public class Memo {
+            @Id
+        		@GeneratedValue(strategy = GenerationType.IDENTITY)
+            private Long id;
+
+            // nullable: null 허용 여부
+            // unique: 중복 허용 여부 (false 일때 중복 허용)
+            @Column(name = "username", nullable = false, unique = true)
+            private String username;
+
+            // length: 컬럼 길이 지정
+            @Column(name = "contents", nullable = false, length = 500)
+            private String contents;
+        }
+        ```
+
+        - SQL 확인
+            - create memo table
+
+                ```sql
+                create table memo (
+                       id bigint not null auto_increment,
+                        contents varchar(500) not null,
+                        username varchar(255) not null,
+                        primary key (id)
+                );
+                ```
+
+        - 여러가지 전략 중 **IDENTITY** 전략을 살펴보겠습니다.
+        - **@GeneratedValue(strategy = GenerationType**.IDENTITY**)**
+            - `id bigint not null auto_increment` : **auto_increment** 조건이 추가된 것을 확인할 수 있습니다.
+            - 해당 옵션을 추가해주면 개발자가 직접 id 값을 넣어주지 않아도 자동으로 순서에 맞게 기본 키가 추가됩니다.
+        📌 jpa-core 프로젝트에서는 학습을 위해 **@GeneratedValue** 옵션을 추가하지 않겠습니다.
+
+## 영속성 컨텍스트란 무엇일까?
+- 영속성 컨텍스트란?
+
+    - Persistence를 한글로 번역하면 영속성, 지속성 이라는 뜻이 됩니다.
+        > Persistence를 객체의 관점으로 해석해 보자면 ‘**객체가 생명(객체가 유지되는 시간)이나 공간(객체의 위치)을 자유롭게 유지하고 이동할수 있는 객체의 성질**’을 의미합니다.
+    - 영속성 컨텍스트를 좀 더 쉽게 표현해 보자면 **Entity 객체를 효율적으로 쉽게 관리하기 위해 만들어진 공간**입니다.
+    - 개발자들은 이제 직접 SQL을 작성하지 않아도 JPA를 사용하여 DB에 데이터를 저장하거나 조회할 수 있으며 수정, 삭제 또한 가능합니다.
+    - 이러한 일련의 과정을 효율적으로 처리하기 위해 JPA는 영속성 컨텍스트에 Entity 객체들을 저장하여 관리하면서 DB와 소통합니다.
+
+- EntityManager
+
+    - 영속성 컨텍스트에 접근하여 Entity 객체들을 조작하기 위해서는 EntityManager가 필요합니다.
+        > EntityManager는 이름 그대로 Entity를 관리하는 관리자입니다.
+    - 개발자들은 EntityManager를 사용해서 Entity를 저장하고 조회하고 수정하고 삭제할 수 있습니다.
+    - EntityManager는 EntityManagerFactory를 통해 생성하여 사용할 수 있습니다.
+
+- EntityManagerFactory
+
+    - EntityManagerFactory는 일반적으로 DB 하나에 하나만 생성되어 애플리케이션이 동작하는 동안 사용됩니다.
+    - EntityManagerFactory를 만들기 위해서는 DB에 대한 정보를 전달해야합니다.
+        - 정보를 전달하기 위해서는 **/resources/META-INF/**  위치에 **persistence.xml** 파일을 만들어 정보를 넣어두면 됩니다.
+
+            ```xml
+            <?xml version="1.0" encoding="UTF-8"?>
+            <persistence version="2.2"
+                         xmlns="http://xmlns.jcp.org/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd">
+                <persistence-unit name="memo">
+                    <class>com.sparta.entity.Memo</class>
+                    <properties>
+                        <property name="jakarta.persistence.jdbc.driver" value="com.mysql.cj.jdbc.Driver"/>
+                        <property name="jakarta.persistence.jdbc.user" value="root"/>
+                        <property name="jakarta.persistence.jdbc.password" value="{비밀번호}"/>
+                        <property name="jakarta.persistence.jdbc.url" value="jdbc:mysql://localhost:3306/memo"/>
+
+                        <property name="hibernate.hbm2ddl.auto" value="create" />
+
+                        <property name="hibernate.show_sql" value="true"/>
+                        <property name="hibernate.format_sql" value="true"/>
+                        <property name="hibernate.use_sql_comments" value="true"/>
+                    </properties>
+                </persistence-unit>
+            </persistence>
+            ```
+
+    ```java
+    EntityManagerFactory emf = Persistence.createEntityManagerFactory("memo");
+    EntityManager em = emf.createEntityManager();
+    ```
+
+    - `EntityManagerFactory emf = Persistence.createEntityManagerFactory("memo");`
+    - 해당 코드를 호출하면 JPA는 **persistence.xml** 의 정보를 토대로 EntityManagerFactory를 생성합니다.
+    - `EntityManager em = emf.createEntityManager();` 코드를 호출하면 EntityManagerFactory를 사용하여 EntityManager를 생성할 수 있습니다.
+
+- JPA의 트랜잭션
+    ### 트랜잭션이란?
+    - 트랜잭션은 DB 데이터들의 무결성과 정합성을 유지하기 위한 하나의 논리적 개념입니다.
+        - 쉽게 표현하자면 DB의 데이터들을 안전하게 관리하기 위해서 생겨난 개념입니다.
+    - 가장 큰 특징은 여러 개의 SQL이 하나의 트랜잭션에 포함될 수 있다는 점입니다.
+    - 이때, 모든 SQL이 성공적으로 수행이 되면 DB에 영구적으로 변경을 반영하지만 SQL 중 단 하나라도 실패한다면 모든 변경을 되돌립니다.
+        - MySQL에서 직접 트랜잭션을 사용해 보겠습니다.
+
+        ```sql
+        START TRANSACTION; # 트랜잭션을 시작합니다.
+
+        INSERT INTO memo (id, username, contents) VALUES (1, 'Robbie', 'Robbie Memo');
+        INSERT INTO memo (id, username, contents) VALUES (2, 'Robbert', 'Robbert Memo');
+        SELECT * FROM memo;
+
+        COMMIT; # 트랜잭션을 커밋합니다.
+
+        SELECT * FROM memo;
+        ```
+
+        - [코드 스니펫] DB 트랜잭션 확인하기
+
+            ```sql
+            START TRANSACTION; # 트랜잭션을 시작합니다.
+
+            INSERT INTO memo (id, username, contents) VALUES (1, 'Robbie', 'Robbie Memo');
+            INSERT INTO memo (id, username, contents) VALUES (2, 'Robbert', 'Robbert Memo');
+            SELECT * FROM memo;
+
+            COMMIT; # 트랜잭션을 커밋합니다.
+
+            SELECT * FROM memo;
+            ```
+
+    - JPA는 DB의 이러한 트랜잭션 개념을 사용하여 효율적으로 Entity를 관리하고 있습니다.
+
+    ### JPA의 트랜잭션
+    - 영속성 컨텍스트에 Entity 객체들을 저장했다고 해서 DB에 바로 반영 되지는 않습니다.
+    - DB에서 하나의 트랜잭션에 여러 개의 SQL을 포함하고 있다가 마지막에 영구적으로 변경을 반영하는 것 처럼 JPA에서도 영속성 컨텍스트로 관리하고 있는 변경이 발생한 객체들의 정보를 쓰기 지연 저장소에 전부 가지고 있다가 마지막에 SQL을 한번에 DB에 요청해 변경을 반영합니다.
+    - 저장 성공 예제)
+    ```java
+    @Test
+    @DisplayName("EntityTransaction 성공 테스트")
+    void test1() {
+        EntityTransaction et = em.getTransaction(); // EntityManager 에서 EntityTransaction 을 가져옵니다.
+
+        et.begin(); // 트랜잭션을 시작합니다.
+
+        try { // DB 작업을 수행합니다.
+
+            Memo memo = new Memo(); // 저장할 Entity 객체를 생성합니다.
+            memo.setId(1L); // 식별자 값을 넣어줍니다.
+            memo.setUsername("Robbie");
+            memo.setContents("영속성 컨텍스트와 트랜잭션 이해하기");
+
+            em.persist(memo); // EntityManager 사용하여 memo 객체를 영속성 컨텍스트에 저장합니다.
+
+            et.commit(); // 오류가 발생하지 않고 정상적으로 수행되었다면 commit 을 호출합니다.
+            // commit 이 호출되면서 DB 에 수행한 DB 작업들이 반영됩니다.
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            et.rollback(); // DB 작업 중 오류 발생 시 rollback 을 호출합니다.
+        } finally {
+            em.close(); // 사용한 EntityManager 를 종료합니다.
+        }
+
+        emf.close(); // 사용한 EntityManagerFactory 를 종료합니다.
+    }
+    ```
+
+    - [코드 스니펫] EntityTransaction 성공 테스트
+
+        ```java
+        @Test
+        @DisplayName("EntityTransaction 성공 테스트")
+        void test1() {
+            EntityTransaction et = em.getTransaction(); // EntityManager 에서 EntityTransaction 을 가져옵니다.
+
+            et.begin(); // 트랜잭션을 시작합니다.
+
+            try { // DB 작업을 수행합니다.
+
+                Memo memo = new Memo(); // 저장할 Entity 객체를 생성합니다.
+                memo.setId(1L); // 식별자 값을 넣어줍니다.
+                memo.setUsername("Robbie");
+                memo.setContents("영속성 컨텍스트와 트랜잭션 이해하기");
+
+                em.persist(memo); // EntityManager 사용하여 memo 객체를 영속성 컨텍스트에 저장합니다.
+
+                et.commit(); // 오류가 발생하지 않고 정상적으로 수행되었다면 commit 을 호출합니다.
+                // commit 이 호출되면서 DB 에 수행한 DB 작업들이 반영됩니다.
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback(); // DB 작업 중 오류 발생 시 rollback 을 호출합니다.
+            } finally {
+                em.close(); // 사용한 EntityManager 를 종료합니다.
+            }
+
+            emf.close(); // 사용한 EntityManagerFactory 를 종료합니다.
+        }
+        ```
+
+    - JPA에서 이러한 트랜잭션의 개념을 적용하기 위해서는 EntityManager에서 EntityTransaction을 가져와 트랜잭션을 적용할 수 있습니다.
+        - `EntityTransaction et = em.getTransaction();`
+        - 해당 코드를 호출하여 EntityTransaction을 가져와 트랜잭션을 관리할 수 있습니다.
+    - `et.begin();`
+        - 트랜잭션을 시작하는 명령어입니다.
+    - `et.commit();`
+        - 트랜잭션의 작업들을 영구적으로 DB에 반영하는 명령어입니다.
+    - `et.rollback();`
+        - 오류가 발생했을 때 트랜잭션의 작업을 모두 취소하고, 이전 상태로 되돌리는 명령어입니다.
+    - 저장 실패 예제)
+
+    ```java
+    @Test
+    @DisplayName("EntityTransaction 실패 테스트")
+    void test2() {
+        EntityTransaction et = em.getTransaction(); // EntityManager 에서 EntityTransaction 을 가져옵니다.
+
+        et.begin(); // 트랜잭션을 시작합니다.
+
+        try { // DB 작업을 수행합니다.
+
+            Memo memo = new Memo(); // 저장할 Entity 객체를 생성합니다.
+            memo.setUsername("Robbert");
+            memo.setContents("실패 케이스");
+
+            em.persist(memo); // EntityManager 사용하여 memo 객체를 영속성 컨텍스트에 저장합니다.
+
+            et.commit(); // 오류가 발생하지 않고 정상적으로 수행되었다면 commit 을 호출합니다.
+            // commit 이 호출되면서 DB 에 수행한 DB 작업들이 반영됩니다.
+        } catch (Exception ex) {
+            System.out.println("식별자 값을 넣어주지 않아 오류가 발생했습니다.");
+            ex.printStackTrace();
+            et.rollback(); // DB 작업 중 오류 발생 시 rollback 을 호출합니다.
+        } finally {
+            em.close(); // 사용한 EntityManager 를 종료합니다.
+        }
+
+        emf.close(); // 사용한 EntityManagerFactory 를 종료합니다.
+    }
+    ```
+
+    - [코드 스니펫] EntityTransaction 실패 테스트
+
+        ```java
+        @Test
+        @DisplayName("EntityTransaction 실패 테스트")
+        void test2() {
+            EntityTransaction et = em.getTransaction(); // EntityManager 에서 EntityTransaction 을 가져옵니다.
+
+            et.begin(); // 트랜잭션을 시작합니다.
+
+            try { // DB 작업을 수행합니다.
+
+                Memo memo = new Memo(); // 저장할 Entity 객체를 생성합니다.
+                memo.setUsername("Robbert");
+                memo.setContents("실패 케이스");
+
+                em.persist(memo); // EntityManager 사용하여 memo 객체를 영속성 컨텍스트에 저장합니다.
+
+                et.commit(); // 오류가 발생하지 않고 정상적으로 수행되었다면 commit 을 호출합니다.
+                // commit 이 호출되면서 DB 에 수행한 DB 작업들이 반영됩니다.
+            } catch (Exception ex) {
+                System.out.println("식별자 값을 넣어주지 않아 오류가 발생했습니다.");
+                ex.printStackTrace();
+                et.rollback(); // DB 작업 중 오류 발생 시 rollback 을 호출합니다.
+            } finally {
+                em.close(); // 사용한 EntityManager 를 종료합니다.
+            }
+
+            emf.close(); // 사용한 EntityManagerFactory 를 종료합니다.
+        }
+        ```
+
+    - 식별자 값을 넣어주지 않아 오류가 발생했습니다.
+    - 따라서 `et.rollback();` 코드가 호출이되어 트랜잭션 작업 내용들이 취소되었습니다.
+        - DB를 확인해보면 해당 작업이 반영되어있지 않은 것을 확인할 수 있습니다.
+
+- 영속성 컨텍스트 Debugging으로 확인하기
+    1. 테스트 시작 위치 가장 왼쪽을 클릭하여 빨간색 원을 만듭니다. 그리고 해당 원에 우측클릭 후 Thread 부분을 클릭한 다음 Make Default 클릭 후 Done을 누릅니다.
+    2. 초록색 화살표 시작 버튼을 클릭 후 Debug를 클릭합니다.
+    3. 체크 부분을 클릭하여 순차적으로 코드를 진행합니다.
+    4. `em.persist(memo);` 코드 호출 후 persistenceContext 위치에 memo 객체가 저장되어있음을 확인할 수 있습니다.
+
+## 09. 영속성 컨텍스트의 기능
+📌 영속성 컨텍스트는 **Entity 객체를 효율적으로 쉽게 관리하기 위해 만들어진 공간**입니다.
+- 영속성 컨텍스트가 어떻게 Entity 객체를 효율적으로 관리하고 있는지 살펴보겠습니다.
+- 1차 캐시
+    - 영속성 컨텍스트는 내부적으로 캐시 저장소를 가지고 있습니다.
+        - 우리가 저장하는 Entity 객체들이 1차 캐시 즉, 캐시 저장소에 저장된다고 생각하시면됩니다.
+        - 캐시 저장소는 Map 자료구조 형태로 되어있습니다.
+            - **key**에는 @Id로 매핑한 기본 키 즉, 식별자 값을 저장합니다.
+            - **value**에는 해당 Entity 클래스의 객체를 저장합니다.
+            - 영속성 컨텍스트는 캐시 저장소 **Key**에 저장한 식별자값을 사용하여 Entity 객체를 구분하고 관리합니다.
+    - 영속성 컨텍스트가 이 캐시 저장소를 어떻게 활용하고 있는지 살펴보겠습니다.
+    - Entity 저장
+        - `em.persist(memo);` 메서드가 호출되면 memo Entity 객체를 캐시 저장소에 저장합니다.
+
+        - memo 저장
+
+        ```sql
+        @Test
+        @DisplayName("1차 캐시 : Entity 저장")
+        void test1() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = new Memo();
+                memo.setId(1L);
+                memo.setUsername("Robbie");
+                memo.setContents("1차 캐시 Entity 저장");
+
+                em.persist(memo);
+
+                et.commit();
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] memo 저장
+
+            ```java
+            @Test
+            @DisplayName("1차 캐시 : Entity 저장")
+            void test1() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo = new Memo();
+                    memo.setId(1L);
+                    memo.setUsername("Robbie");
+                    memo.setContents("1차 캐시 Entity 저장");
+
+                    em.persist(memo);
+
+                    et.commit();
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+        - em > persistenceContext > entitiesBykey를 확인해 보시면key-value 형태로 정보가 저장되어있음을 확인할 수 있습니다.
+
+    - Entity 조회
+        1. 캐시 저장소에 조회하는 Id가 존재하지 않은 경우
+            1. 캐시 저장소 조회
+            2. DB SELECT 조회 후 캐시 저장소에 저장
+            - `em.find(Memo.class, 1);` 호출 시 캐시 저장소를 확인 한 후 해당 값이 없다면?
+            - DB에 SELECT 조회 후 해당 값을 캐시 저장소에 저장하고 반환합니다.
+            - memo 조회 예제1)
+
+            ```sql
+            @Test
+            @DisplayName("Entity 조회 : 캐시 저장소에 해당하는 Id가 존재하지 않은 경우")
+            void test2() {
+                try {
+
+                    Memo memo = em.find(Memo.class, 1);
+                    System.out.println("memo.getId() = " + memo.getId());
+                    System.out.println("memo.getUsername() = " + memo.getUsername());
+                    System.out.println("memo.getContents() = " + memo.getContents());
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+            - [코드 스니펫] memo 조회 예제1)
+
+                ```java
+                @Test
+                @DisplayName("Entity 조회 : 캐시 저장소에 해당하는 Id가 존재하지 않은 경우")
+                void test2() {
+                    try {
+
+                        Memo memo = em.find(Memo.class, 1);
+                        System.out.println("memo.getId() = " + memo.getId());
+                        System.out.println("memo.getUsername() = " + memo.getUsername());
+                        System.out.println("memo.getContents() = " + memo.getContents());
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    } finally {
+                        em.close();
+                    }
+
+                    emf.close();
+                }
+                ```
+
+            - DB에서 데이터를 조회만 하는 경우에는 데이터의 변경이 발생하는 것이 아니기 때문에 트랜잭션이 없어도 조회가 가능합니다.
+            - `Memo memo = em.find(Memo.class, 1);` 호출 시 캐시 저장소에 해당 값이 존재하지 않기 때문에 DB에 SELECT 조회하여 캐시 저장소에 저장한 후 반환합니다.
+
+        2. 캐시 저장소에 조회하는 Id가 존재하는 경우
+            - `em.find(Memo.class, 1);` 호출 시 캐시 저장소에 식별자 값이 1이면서 Memo Entity 타입인 값이 있는지 조회합니다.
+                - 값이 있다면 해당 Entity 객체를 반환합니다.
+
+            - memo 조회 예제2)
+
+            ```sql
+            @Test
+            @DisplayName("Entity 조회 : 캐시 저장소에 해당하는 Id가 존재하는 경우")
+            void test3() {
+                try {
+
+                    Memo memo1 = em.find(Memo.class, 1);
+                    System.out.println("memo1 조회 후 캐시 저장소에 저장\n");
+
+                    Memo memo2 = em.find(Memo.class, 1);
+                    System.out.println("memo2.getId() = " + memo2.getId());
+                    System.out.println("memo2.getUsername() = " + memo2.getUsername());
+                    System.out.println("memo2.getContents() = " + memo2.getContents());
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+            - [코드 스니펫] memo 조회 예제2)
+
+                ```java
+                @Test
+                @DisplayName("Entity 조회 : 캐시 저장소에 해당하는 Id가 존재하는 경우")
+                void test3() {
+                    try {
+
+                        Memo memo1 = em.find(Memo.class, 1);
+                        System.out.println("memo1 조회 후 캐시 저장소에 저장\n");
+
+                        Memo memo2 = em.find(Memo.class, 1);
+                        System.out.println("memo2.getId() = " + memo2.getId());
+                        System.out.println("memo2.getUsername() = " + memo2.getUsername());
+                        System.out.println("memo2.getContents() = " + memo2.getContents());
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    } finally {
+                        em.close();
+                    }
+
+                    emf.close();
+                }
+                ```
+
+            - `Memo memo1 = em.find(Memo.class, 1);` 호출 때는 캐시 저장소에 존재하지 않기 때문에 DB에 SELECT 조회하여 캐시 저장소에 저장합니다.
+            - `Memo memo2 = em.find(Memo.class, 1);` 를 호출 했을 때는 이미 캐시 저장소에 해당 값이 존재하기 때문에 DB에 조회하지 않고 캐시 저장소에서 해당 값을 반환합니다.
+
+        - **'1차 캐시'** 사용의 장점
+            1. DB 조회 횟수를 줄임
+            2. **'1차 캐시'**를 사용해 DB row 1개 당 객체 1개가 사용되는 것을 보장 (객체 동일성 보장)
+            - 객체 동일성 보장
+
+                ```sql
+                @Test
+                @DisplayName("객체 동일성 보장")
+                void test4() {
+                    EntityTransaction et = em.getTransaction();
+
+                    et.begin();
+
+                    try {
+                        Memo memo3 = new Memo();
+                        memo3.setId(2L);
+                        memo3.setUsername("Robbert");
+                        memo3.setContents("객체 동일성 보장");
+                        em.persist(memo3);
+
+                        Memo memo1 = em.find(Memo.class, 1);
+                        Memo memo2 = em.find(Memo.class, 1);
+                        Memo memo  = em.find(Memo.class, 2);
+
+                        System.out.println(memo1 == memo2);
+                        System.out.println(memo1 == memo);
+
+                        et.commit();
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        et.rollback();
+                    } finally {
+                        em.close();
+                    }
+
+                    emf.close();
+                }
+                ```
+
+                - [코드 스니펫] 객체 동일성 보장
+
+                    ```java
+                    @Test
+                    @DisplayName("객체 동일성 보장")
+                    void test4() {
+                        EntityTransaction et = em.getTransaction();
+
+                        et.begin();
+
+                        try {
+                            Memo memo3 = new Memo();
+                            memo3.setId(2L);
+                            memo3.setUsername("Robbert");
+                            memo3.setContents("객체 동일성 보장");
+                            em.persist(memo3);
+
+                            Memo memo1 = em.find(Memo.class, 1);
+                            Memo memo2 = em.find(Memo.class, 1);
+                            Memo memo  = em.find(Memo.class, 2);
+
+                            System.out.println(memo1 == memo2);
+                            System.out.println(memo1 == memo);
+
+                            et.commit();
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                            et.rollback();
+                        } finally {
+                            em.close();
+                        }
+
+                        emf.close();
+                    }
+                    ```
+
+                - 같은 값을 조회하는 memo1과 memo2는 == 결과 true를 반환합니다.
+                - memo1과 다른 값을 조회하는 memo는 == 결과 false를 반환합니다.
+
+    - Entity 삭제
+        1. 삭제할 Entity를 조회한 후 캐시 저장소에 없다면 DB에 조회해서 저장합니다.
+        2. `em.remove(entity);`
+        - `em.remove(memo);` 호출 시 삭제할 Entity를 DELETED 상태로 만든 후 트랜잭션 commit 후 Delete SQL이 DB에 요청됩니다.
+        - memo 삭제
+
+        ```sql
+        @Test
+        @DisplayName("Entity 삭제")
+        void test5() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = em.find(Memo.class, 2);
+
+                em.remove(memo);
+
+                et.commit();
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] memo 삭제
+
+            ```java
+            @Test
+            @DisplayName("Entity 삭제")
+            void test5() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo = em.find(Memo.class, 2);
+
+                    em.remove(memo);
+
+                    et.commit();
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+        - `em.remove(memo);` 호출되면서 memo Entity 객체를 DELETED 상태로 만들고 트랜잭션 commit 후 Delete SQL이 DB에 요청되었습니다.
+        - `em.find(Memo.class, 2);` 호출 하여 memo 객체를 캐시 저장소에 저장한 후
+        - entityEntry를 확인해 보시면 memo Entity 객체가 영속성 컨텍스트가 관리하는 MANAGED 상태인 것을 확인할 수 있습니다.
+        - `em.remove(memo);` 호출 후 memo Entity 객체가 DELETED 상태로 바뀐 것을 확인할 수 있습니다.
+        - 트랜잭션 commit 후 DB 데이터를 확인해보면 해당 데이터가 삭제 되어있는 것을 확인할 수 있습니다.
+
+- 쓰기 지연 저장소(ActionQueue)
+    - JPA의 트랜잭션을 학습하면서 JPA가 트랜잭션 처럼 SQL을 모아서 한번에 DB에 반영한다는 것을 배웠습니다.
+        - JPA는 이를 구현하기 위해 쓰기 지연 저장소를 만들어 SQL을 모아두고 있다가 트랜잭션 commit 후 한번에 DB에 반영합니다.
+    - Debugging을 통해 실제로 쓰기 지연 저장소에 SQL을 모아서 한번에 반영하는지 확인해보겠습니다.
+    - 쓰기 지연 저장소 (ActionQueue)
+    ```sql
+    @Test
+    @DisplayName("쓰기 지연 저장소 확인")
+    void test6() {
+        EntityTransaction et = em.getTransaction();
+
+        et.begin();
+
+        try {
+            Memo memo = new Memo();
+            memo.setId(2L);
+            memo.setUsername("Robbert");
+            memo.setContents("쓰기 지연 저장소");
+            em.persist(memo);
+
+            Memo memo2 = new Memo();
+            memo2.setId(3L);
+            memo2.setUsername("Bob");
+            memo2.setContents("과연 저장을 잘 하고 있을까?");
+            em.persist(memo2);
+
+            System.out.println("트랜잭션 commit 전");
+            et.commit();
+            System.out.println("트랜잭션 commit 후");
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            et.rollback();
+        } finally {
+            em.close();
+        }
+
+        emf.close();
+    }
+    ```
+
+    - [코드 스니펫] 쓰기 지연 저장소 (ActionQueue)
+
+        ```java
+        @Test
+        @DisplayName("쓰기 지연 저장소 확인")
+        void test6() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+                Memo memo = new Memo();
+                memo.setId(2L);
+                memo.setUsername("Robbert");
+                memo.setContents("쓰기 지연 저장소");
+                em.persist(memo);
+
+                Memo memo2 = new Memo();
+                memo2.setId(3L);
+                memo2.setUsername("Bob");
+                memo2.setContents("과연 저장을 잘 하고 있을까?");
+                em.persist(memo2);
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+    - 쓰기 지연 저장소 확인
+        - em > actionQueue를 확인해보면 insertions > executables에 Insert할 memo#2, memo#3 Entity 객체 2개가 들어가 있는 것을 확인할 수 있습니다.
+    - 트랜잭션 commit 후
+        - actionQueue에 있던 insertions 데이터가 사라진 것을 확인할 수 있습니다.
+        - 실제로 기록을 확인해보면 트랜잭션 commit 호출 전까지는 SQL 요청이 없다가 트랜잭션 commit 후 한번에 Insert SQL 2개가 순서대로 요청된 것을 확인할 수 있습니다.
+    - flush()
+        - 트랜잭션 commit 후 쓰기 지연 저장소의 SQL들이 한번에 요청됨을 확인했습니다.
+        - 사실 트랜잭션 commit 후 추가적인 동작이 있는데 바로 `em.flush();` 메서드의 호출입니다.
+        - flush 메서드는 영속성 컨텍스트의 변경 내용들을 DB에 반영하는 역할을 수행합니다.
+            - 즉, 쓰기 지연 저장소의 SQL들을 DB에 요청하는 역할을 수행합니다.
+        - flush() 동작 확인을 위해 직접 호출해보겠습니다.
+        ```sql
+        @Test
+        @DisplayName("flush() 메서드 확인")
+        void test7() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+                Memo memo = new Memo();
+                memo.setId(4L);
+                memo.setUsername("Flush");
+                memo.setContents("Flush() 메서드 호출");
+                em.persist(memo);
+
+                System.out.println("flush() 전");
+                em.flush(); // flush() 직접 호출
+                System.out.println("flush() 후\n");
+
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] flush()
+
+            ```java
+            @Test
+            @DisplayName("flush() 메서드 확인")
+            void test7() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+                    Memo memo = new Memo();
+                    memo.setId(4L);
+                    memo.setUsername("Flush");
+                    memo.setContents("Flush() 메서드 호출");
+                    em.persist(memo);
+
+                    System.out.println("flush() 전");
+                    em.flush(); // flush() 직접 호출
+                    System.out.println("flush() 후\n");
+
+
+                    System.out.println("트랜잭션 commit 전");
+                    et.commit();
+                    System.out.println("트랜잭션 commit 후");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+        - `em.flush();` 메서드가 호출되자 바로 DB에 쓰기 지연 저장소의 SQL이 요청되었습니다.
+        - 이미 쓰기 지연 저장소의 SQL이 요청 되었기 때문에 더 이상 요청할 SQL이 없어 트랜잭션이 commit 된 후에 SQL 기록이 보이지 않습니다.
+        - 추가) 트랜잭션을 설정하지 않고 플러시 메서드를 호출하면 `no transaction is in progress` 메시지와 함께 `TransactionRequiredException` 오류가 발생합니다.
+            - Insert, Update, Delete 즉, 데이터 변경 SQL을 DB에 요청 및 반영하기 위해서는 트랜잭션이 필요합니다.
+
+- 변경 감지(Dirty Checking)
+    - 영속성 컨텍스트에 저장된 Entity가 변경될 때마다 Update SQL이 쓰기 지연 저장소에 저장된다면?
+        - 하나의 Update SQL로 처리할 수 있는 상황을 여러번 Update SQL을 요청하게 되기 때문에 비효율적입니다.
+    - 그렇다면 JPA는 어떻게 Update를 처리할까요?
+        - `em.update(entity);` 같은 메서드를 지원할 것 같지만 찾아볼 수 없습니다.
+    - JPA에서는 Update를 어떻게 처리하는지 살펴보겠습니다.
+    - JPA는 영속성 컨텍스트에 Entity를 저장할 때 최초 상태(LoadedState)를 저장합니다.
+        - 트랜잭션이 commit되고 `em.flush();` 가 호출되면 Entity의 현재 상태와 저장한 최초 상태를 비교합니다.
+        - 변경 내용이 있다면 Update SQL을 생성하여 쓰기 지연 저장소에 저장하고 모든 쓰기지연 저장소의 SQL을 DB에 요청합니다.
+        - 마지막으로 DB의 트랜잭션이 commit 되면서 반영됩니다.
+    - 따라서 변경하고 싶은 데이터가 있다면 먼저 데이터를 조회하고 해당 Entity 객체의 데이터를 변경하면 자동으로 Update SQL이 생성되고 DB에 반영됩니다.
+        - 이러한 과정을 변경 감지, Dirty Checking이라 부릅니다.
+    - 변경할 memo 데이터를 조회한 후 변경 해보겠습니다.
+
+    ```sql
+    @Test
+    @DisplayName("변경 감지 확인")
+    void test8() {
+        EntityTransaction et = em.getTransaction();
+
+        et.begin();
+
+        try {
+            System.out.println("변경할 데이터를 조회합니다.");
+            Memo memo = em.find(Memo.class, 4);
+            System.out.println("memo.getId() = " + memo.getId());
+            System.out.println("memo.getUsername() = " + memo.getUsername());
+            System.out.println("memo.getContents() = " + memo.getContents());
+
+            System.out.println("\n수정을 진행합니다.");
+            memo.setUsername("Update");
+            memo.setContents("변경 감지 확인");
+
+            System.out.println("트랜잭션 commit 전");
+            et.commit();
+            System.out.println("트랜잭션 commit 후");
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            et.rollback();
+        } finally {
+            em.close();
+        }
+
+        emf.close();
+    }
+    ```
+
+    - [코드 스니펫] 변경 감지 확인
+
+        ```java
+        @Test
+        @DisplayName("변경 감지 확인")
+        void test8() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+                System.out.println("변경할 데이터를 조회합니다.");
+                Memo memo = em.find(Memo.class, 4);
+                System.out.println("memo.getId() = " + memo.getId());
+                System.out.println("memo.getUsername() = " + memo.getUsername());
+                System.out.println("memo.getContents() = " + memo.getContents());
+
+                System.out.println("\n수정을 진행합니다.");
+                memo.setUsername("Update");
+                memo.setContents("변경 감지 확인");
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+    - entityInstance는 Entity 객체의 현재 상태입니다.
+    - entityEntry > loadedState는 조회했을 때 즉, 해당 Entity의 최초 상태입니다.
+    - 트랜잭션 commit 후 `em.flush();` 메서드가 호출되면 현재 상태와 최초 상태를 비교하고 변경이 있다면 Update SQL을 생성하여 쓰기 지연 저장소에 저장한 후 DB에 요청합니다.
+    - 수정을 진행하고 트랜잭션 commit 후 Update SQL이 요청된 것을 확인할 수 있습니다.
+
