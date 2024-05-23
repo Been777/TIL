@@ -1,0 +1,1164 @@
+# 내일배움캠프 240523 TIL
+Java 26일차
+JPA CORE(~9)
+-------------------------------------------------------------------------------
+
+## Entity의 상태
+- 비영속(**Transient**)
+    ```java
+    Memo memo = new Memo(); // 비영속 상태
+    memo.setId(1L);
+    memo.setUsername("Robbie");
+    memo.setContents("비영속과 영속 상태");
+    ```
+    - 쉽게 말하자면 **new** 연산자를 통해 인스턴스화 된 Entity 객체를 의미합니다.
+    - 아직 영속성 컨텍스트에 저장되지 않았기 때문에 JPA의 관리를 받지 않습니다.
+
+- 영속(**Managed**)
+    ```java
+    em.persist(memo);
+    ```
+    - **persist(entity)** : 비영속 Entity를 EntityManager를 통해 영속성 컨텍스트에 저장하여 관리되고 있는 상태로 만듭니다.
+    ```sql
+    @Test
+    @DisplayName("비영속과 영속 상태")
+    void test1() {
+        EntityTransaction et = em.getTransaction();
+
+        et.begin();
+
+        try {
+
+            Memo memo = new Memo(); // 비영속 상태
+            memo.setId(1L);
+            memo.setUsername("Robbie");
+            memo.setContents("비영속과 영속 상태");
+
+            em.persist(memo);
+
+            et.commit();
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            et.rollback();
+        } finally {
+            em.close();
+        }
+
+        emf.close();
+    }
+    ``
+    - [코드 스니펫] 비영속과 영속 상태
+
+        ```java
+        @Test
+        @DisplayName("비영속과 영속 상태")
+        void test1() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = new Memo(); // 비영속 상태
+                memo.setId(1L);
+                memo.setUsername("Robbie");
+                memo.setContents("비영속과 영속 상태");
+
+                em.persist(memo);
+
+                et.commit();
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+    - 비영속 상태이기 때문에 `entitiesByKey=null` 입니다.
+    - 비영속 상태는 JPA가 관리하지 못하기 때문에 해당 객체의 데이터를 변경해도 변경 감지가 이루어지지 않습니다.
+    - `em.persist(memo);` 메서드 호출 후 영속성 컨텍스트에 저장되었고 MANAGED 상태 즉, JPA가 관리하는 영속 상태의 Entity가 되었습니다.
+
+- 준영속(**Detached**)
+    - 준영속 상태는 영속성 컨텍스트에 저장되어 관리되다가 분리된 상태를 의미합니다.
+    - 영속 상태에서 준영속 상태로 바꾸는 방법
+    - **detach(entity)**
+
+        ```java
+        em.detach(memo);
+        ```
+
+        - **detach(entity)** : 특정 Entity만 준영속 상태로 전환합니다.
+            - 영속성 컨텍스트에서 관리되다(**Managed**)가 ****분리된 상태(**Detached**)로 전환됩니다.
+
+        ```java
+        @Test
+        @DisplayName("준영속 상태 : detach()")
+        void test2() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = em.find(Memo.class, 1);
+                System.out.println("memo.getId() = " + memo.getId());
+                System.out.println("memo.getUsername() = " + memo.getUsername());
+                System.out.println("memo.getContents() = " + memo.getContents());
+
+                // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                System.out.println("detach() 호출");
+                em.detach(memo);
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                System.out.println("memo Entity 객체 수정 시도");
+                memo.setUsername("Update");
+                memo.setContents("memo Entity Update");
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] detach(entity)
+
+            ```java
+            @Test
+            @DisplayName("준영속 상태 : detach()")
+            void test2() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo = em.find(Memo.class, 1);
+                    System.out.println("memo.getId() = " + memo.getId());
+                    System.out.println("memo.getUsername() = " + memo.getUsername());
+                    System.out.println("memo.getContents() = " + memo.getContents());
+
+                    // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                    System.out.println("detach() 호출");
+                    em.detach(memo);
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                    System.out.println("memo Entity 객체 수정 시도");
+                    memo.setUsername("Update");
+                    memo.setContents("memo Entity Update");
+
+                    System.out.println("트랜잭션 commit 전");
+                    et.commit();
+                    System.out.println("트랜잭션 commit 후");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+        - `em.find(Memo.class, 1);` 메서드 호출 후 MANAGED 상태입니다.
+        - `em.detach(memo);` 메서드를 호출하여 특정 Entity 객체 Memo#1를 영속성 컨텍스트에서 제거하였습니다.
+        - 준영속 상태로 전환되면 1차 캐시 즉, 캐시 저장소에서 제거되기 때문에 JPA의 관리를 받지 못해 영속성 컨텍스트의 어떠한 기능도 사용할 수 없습니다.
+        - 따라서 memo Entity 객체의 데이터를 수정해도 변경감지 기능을 사용할 수 없어 Update SQL이 수행되지 않았습니다.
+        - `em.contains(memo);` 는 해당 객체가 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드로 `em.detach(memo);` 이후 확인했을 때 false가 출력된 것을 확인할 수 있습니다.
+
+    - **clear()**
+
+        ```java
+        em.clear();
+        ```
+
+        - **clear()** : 영속성 컨텍스트를 완전히 초기화합니다.
+            - 영속성 컨텍스트의 모든 Entity를 준영속 상태로 전환합니다.
+            - 영속성 컨텍스트 틀은 유지하지만 내용은 비워 새로 만든 것과 같은 상태가 됩니다.
+            - 따라서 계속해서 영속성 컨텍스트를 이용할 수 있습니다.
+
+        ```java
+        @Test
+        @DisplayName("준영속 상태 : clear()")
+        void test3() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo1 = em.find(Memo.class, 1);
+                Memo memo2 = em.find(Memo.class, 2);
+
+                // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                System.out.println("clear() 호출");
+                em.clear();
+                System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                System.out.println("memo#1 Entity 다시 조회");
+                Memo memo = em.find(Memo.class, 1);
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+                System.out.println("\n memo Entity 수정 시도");
+                memo.setUsername("Update");
+                memo.setContents("memo Entity Update");
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] clear()
+
+            ```java
+            @Test
+            @DisplayName("준영속 상태 : clear()")
+            void test3() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo1 = em.find(Memo.class, 1);
+                    Memo memo2 = em.find(Memo.class, 2);
+
+                    // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                    System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                    System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                    System.out.println("clear() 호출");
+                    em.clear();
+                    System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                    System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                    System.out.println("memo#1 Entity 다시 조회");
+                    Memo memo = em.find(Memo.class, 1);
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+                    System.out.println("\n memo Entity 수정 시도");
+                    memo.setUsername("Update");
+                    memo.setContents("memo Entity Update");
+
+                    System.out.println("트랜잭션 commit 전");
+                    et.commit();
+                    System.out.println("트랜잭션 commit 후");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+        - `em.clear();` 메서드 호출 후 완전히 비워진 영속성 컨텍스트를 확인할 수 있습니다.
+        - 다시 memo#1 Entity를 조회하여 영속성 컨텍스트에 저장된 것을 확인할 수 있습니다.
+        - `em.clear();` 메서드 호출 후 `em.contains(memo1,2);` 확인했을 때 false가 출력된 것을 확인할 수 있습니다.
+        - 다시 memo#1 Entity를 조회한 후 `em.contains(memo);` 확인했을 때 true가 출력된 것을 확인할 수 있습니다.
+        - 또한 memo Entity 객체의 데이터를 수정하자 트랜잭션 commit 후 Update SQL이 수행된 것을 확인할 수 있습니다.
+
+    - **close()**
+        ```java
+        em.close();
+        ```
+        - **close()** : 영속성 컨텍스트를 종료합니다.
+            - 해당 영속성 컨텍스트가 관리하던 영속성 상태의 Entity들은 모두 준영속 상태로 변경됩니다.
+            - 영속성 컨텍스트가 종료되었기 때문에 계속해서 영속성 컨텍스트를 사용할 수 없습니다.
+
+        ```java
+        @Test
+        @DisplayName("준영속 상태 : close()")
+        void test4() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo1 = em.find(Memo.class, 1);
+                Memo memo2 = em.find(Memo.class, 2);
+
+                // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                System.out.println("close() 호출");
+                em.close();
+                Memo memo = em.find(Memo.class, 2); // Session/EntityManager is closed 메시지와 함께 오류 발생
+                System.out.println("memo.getId() = " + memo.getId());
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] close()
+
+            ```java
+            @Test
+            @DisplayName("준영속 상태 : close()")
+            void test4() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo1 = em.find(Memo.class, 1);
+                    Memo memo2 = em.find(Memo.class, 2);
+
+                    // em.contains(entity) : Entity 객체가 현재 영속성 컨텍스트에 저장되어 관리되는 상태인지 확인하는 메서드
+                    System.out.println("em.contains(memo1) = " + em.contains(memo1));
+                    System.out.println("em.contains(memo2) = " + em.contains(memo2));
+
+                    System.out.println("close() 호출");
+                    em.close();
+                    Memo memo = em.find(Memo.class, 2); // Session/EntityManager is closed 메시지와 함께 오류 발생
+                    System.out.println("memo.getId() = " + memo.getId());
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+        - `em.close();` 메서드 호출 이후 EntityManager를 사용하려고 하자 오류가 발생했습니다.
+            - 영속성 컨텍스트가 종료되면 계속해서 영속성 컨텍스트를 사용할 수 없다는 것을 확인할 수 있습니다.
+
+    - 준영속 상태에서 다시 영속 상태로 바꾸는 방법
+    - **merge(entity)**
+
+        ```java
+        em.merge(memo);
+        ```
+
+        - **merge(entity)** : 전달받은 Entity를 사용하여 새로운 영속 상태의 Entity를 반환합니다.
+        - **merge(entity)** 동작
+            - 파라미터로 전달된 Entity의 식별자 값으로 영속성 컨텍스트를 조회합니다.
+                1. 해당 Entity가 영속성 컨텍스트에 없다면?
+                    1. DB에서 새롭게 조회합니다.
+                    2. 조회한 Entity를 영속성 컨텍스트에  저장합니다.
+                    3. 전달 받은 Entity의 값을 사용하여 병합합니다.
+                    4. Update SQL이 수행됩니다. (수정)
+                2. 만약 DB에서도 없다면 ?
+                    1. 새롭게 생성한 Entity를 영속성 컨텍스트에 저장합니다.
+                    2. Insert SQL이 수행됩니다. (저장)
+        - 따라서 **merge(entity)** 메서드는 비영속, 준영속 모두 파라미터로 받을 수 있으며 상황에 따라 ‘저장’을 할 수도 ‘수정’을 할 수도 있습니다.
+
+        1. **merge(entity)** 저장
+
+        ```java
+        @Test
+        @DisplayName("merge() : 저장")
+        void test5() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = new Memo();
+                memo.setId(3L);
+                memo.setUsername("merge()");
+                memo.setContents("merge() 저장");
+
+                System.out.println("merge() 호출");
+                Memo mergedMemo = em.merge(memo);
+
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+                System.out.println("em.contains(mergedMemo) = " + em.contains(mergedMemo));
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] merge(entity) 저장
+
+            ```java
+            @Test
+            @DisplayName("merge() : 저장")
+            void test5() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo = new Memo();
+                    memo.setId(3L);
+                    memo.setUsername("merge()");
+                    memo.setContents("merge() 저장");
+
+                    System.out.println("merge() 호출");
+                    Memo mergedMemo = em.merge(memo);
+
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+                    System.out.println("em.contains(mergedMemo) = " + em.contains(mergedMemo));
+
+                    System.out.println("트랜잭션 commit 전");
+                    et.commit();
+                    System.out.println("트랜잭션 commit 후");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+        - `em.merge(memo);` 호출 후 영속성 컨텍스트에 Memo#3 객체가 저장되고 Insert SQL이 추가된 것을 확인할 수 있습니다.
+        - `em.merge(memo);` 호출 후 영속성 컨텍스트에 해당 값이 없어 DB에 조회 했는데도 해당 값이 없기 때문에 새롭게 생성하여 영속성 컨텍스트에 저장하고 Insert SQL이 수행되었습니다.
+            - 비영속 상태의 memo는 merge() 호출 후에 해당 memo 객체가 영속성 컨텍스트에 저장된게 아니라 새롭게 생성되어 영속성 컨텍스트에 저장되었기 때문에 false가 반환되었습니다.
+            - 새롭게 저장된 영속 상태의 객체를 반환받은 mergedMemo는 true가 반환되었습니다.
+
+        1. **merge(entity)** 수정
+
+        ```java
+        @Test
+        @DisplayName("merge() : 수정")
+        void test6() {
+            EntityTransaction et = em.getTransaction();
+
+            et.begin();
+
+            try {
+
+                Memo memo = em.find(Memo.class, 3);
+                System.out.println("memo.getId() = " + memo.getId());
+                System.out.println("memo.getUsername() = " + memo.getUsername());
+                System.out.println("memo.getContents() = " + memo.getContents());
+
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                System.out.println("detach() 호출");
+                em.detach(memo); // 준영속 상태로 전환
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                System.out.println("준영속 memo 값 수정");
+                memo.setContents("merge() 수정");
+
+                System.out.println("\n merge() 호출");
+                Memo mergedMemo = em.merge(memo);
+                System.out.println("mergedMemo.getContents() = " + mergedMemo.getContents());
+
+                System.out.println("em.contains(memo) = " + em.contains(memo));
+                System.out.println("em.contains(mergedMemo) = " + em.contains(mergedMemo));
+
+                System.out.println("트랜잭션 commit 전");
+                et.commit();
+                System.out.println("트랜잭션 commit 후");
+
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                et.rollback();
+            } finally {
+                em.close();
+            }
+
+            emf.close();
+        }
+        ```
+
+        - [코드 스니펫] merge(entity) 수정
+
+            ```java
+            @Test
+            @DisplayName("merge() : 수정")
+            void test6() {
+                EntityTransaction et = em.getTransaction();
+
+                et.begin();
+
+                try {
+
+                    Memo memo = em.find(Memo.class, 3);
+                    System.out.println("memo.getId() = " + memo.getId());
+                    System.out.println("memo.getUsername() = " + memo.getUsername());
+                    System.out.println("memo.getContents() = " + memo.getContents());
+
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                    System.out.println("detach() 호출");
+                    em.detach(memo); // 준영속 상태로 전환
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+
+                    System.out.println("준영속 memo 값 수정");
+                    memo.setContents("merge() 수정");
+
+                    System.out.println("\n merge() 호출");
+                    Memo mergedMemo = em.merge(memo);
+                    System.out.println("mergedMemo.getContents() = " + mergedMemo.getContents());
+
+                    System.out.println("em.contains(memo) = " + em.contains(memo));
+                    System.out.println("em.contains(mergedMemo) = " + em.contains(mergedMemo));
+
+                    System.out.println("트랜잭션 commit 전");
+                    et.commit();
+                    System.out.println("트랜잭션 commit 후");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    et.rollback();
+                } finally {
+                    em.close();
+                }
+
+                emf.close();
+            }
+            ```
+
+        - detach() 메서드 호출로 조회해온 영속 상태의 memo 객체를 준영속 상태로 전환했습니다.
+        - 준영속 상태의 memo의 값을 수정한 후 memo 객체를 사용해서 merge() 메서드를 호출했습니다.
+        - memo 객체는 준영속 상태이기 때문에 현재 영속성 컨텍스트에는 해당 객체가 존재하지 않습니다.
+            - 따라서 DB에서 식별자 값을 사용하여 조회한 후 영속성 컨텍스트에 저장하고 파라미터로 받아온 준영속 상태의 memo 객체의 값을 새롭게 저장한 영속 상태의 객체에 병합하고 반환합니다.
+            - 그 결과 반환된 mergedMemo의 contents를 출력하였을 때 변경되었던 내용인 “merge() 수정”이 출력되었습니다.
+            - 트랜잭션 commit 후 Update SQL이 수행됩니다.
+        - 준영속 상태의 Entity memo는 merge() 호출 후에도 영속성 컨텍스트에 저장되어 있지 않기 때문에 false가 반환되었고
+        - 새롭게 저장된 영속 상태의 객체를 반환받은 mergedMemo는 true가 반환되었습니다.
+
+- 삭제(**Removed**)
+    ```java
+    em.remove(memo);
+    ```
+    - **remove(entity)** : 삭제하기 위해 조회해온 영속 상태의 Entity를 파라미터로 전달받아 삭제 상태로 전환합니다.
+
+# Spring Data JPA
+
+## 11. SpringBoot의 JPA
+
+- SpringBoot 환경에서의 JPA
+    - 메모장 프로젝트 JPA 설정
+        - build.gradle
+            - [코드 스니펫] build.gradle :  `spring-boot-starter-data-jpa` 추가
+
+                ```groovy
+                // JPA 설정
+                implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+                ```
+
+        - application.properties : Hibernate 설정
+            - show_sql, format_sql, use_sql_comments 옵션
+                - Hibernate가 DB에 요청하는 모든 SQL을 보기좋게 출력 해줍니다.
+            - ddl-auto
+                - create : 기존 테이블 삭제 후 다시 생성합니다. (DROP + CREATE)
+                - create-drop : create와 같으나 종료시점에 테이블을 DROP 합니다.
+                - update : 변경된 부분만 반영합니다.
+                - validate : Entity와 테이블이 정상 매핑되었는지만 확인합니다.
+                - none: 아무것도 하지 않습니다.
+            - [코드 스니펫] application.properties : Hibernate 설정
+
+                ```groovy
+                spring.jpa.hibernate.ddl-auto=update
+
+                spring.jpa.properties.hibernate.show_sql=true
+                spring.jpa.properties.hibernate.format_sql=true
+                spring.jpa.properties.hibernate.use_sql_comments=true
+                ```
+
+        - Memo Entity
+            - [코드 스니펫] Memo Entity
+
+                ```java
+                package com.sparta.memo.entity;
+
+                import com.sparta.memo.dto.MemoRequestDto;
+                import jakarta.persistence.*;
+                import lombok.Getter;
+                import lombok.NoArgsConstructor;
+                import lombok.Setter;
+
+                @Entity // JPA가 관리할 수 있는 Entity 클래스 지정
+                @Getter
+                @Setter
+                @Table(name = "memo") // 매핑할 테이블의 이름을 지정
+                @NoArgsConstructor
+                public class Memo {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    @Column(name = "username", nullable = false)
+                    private String username;
+                    @Column(name = "contents", nullable = false, length = 500)
+                    private String contents;
+
+                    public Memo(MemoRequestDto requestDto) {
+                        this.username = requestDto.getUsername();
+                        this.contents = requestDto.getContents();
+                    }
+
+                    public void update(MemoRequestDto requestDto) {
+                        this.username = requestDto.getUsername();
+                        this.contents = requestDto.getContents();
+                    }
+                }
+                ```
+
+    - SpringBoot 환경에서는 EntityManagerFactory와 EntityManager를 자동으로 생성해줍니다.
+        - application.properties에 DB 정보를 전달해 주면 이를 토대로 EntityManagerFactory가 생성됩니다.
+
+    ```java
+    @PersistenceContext
+    EntityManager em;
+    ```
+
+    - @PersistenceConext 애너테이션을 사용하면 자동으로 생성된 EntityManager를 주입받아 사용할 수 있습니다.
+
+- Spring의 트랜잭션
+    - Spring 프레임워크에서는 DB의 트랜잭션 개념을 애플리케이션에 적용할 수 있도록 트랜잭션 관리자를 제공합니다.
+
+    ```java
+    @Transactional(readOnly = true)
+    public class SimpleJpaRepository<T, ID> implements JpaRepositoryImplementation<T, ID> {
+    						...
+
+    		@Transactional
+    		@Override
+    		public <S extends T> S save(S entity) {
+
+    			Assert.notNull(entity, "Entity must not be null");
+
+    			if (entityInformation.isNew(entity)) {
+    				em.persist(entity);
+    				return entity;
+    			} else {
+    				return em.merge(entity);
+    			}
+    		}
+
+    						...
+    }
+    ```
+
+    - 예시 코드 처럼 @Transactional 애너테이션을 클래스나 메서드에 추가하면 쉽게 트랜잭션 개념을 적용할 수 있습니다.
+        - 메서드가 호출되면, 해당 메서드 내에서 수행되는 모든 DB 연산 내용은 하나의 트랜잭션으로 묶입니다.
+        - 이때, 해당 메서드가 정상적으로 수행되면 트랜잭션을 커밋하고, 예외가 발생하면 롤백합니다.
+        - 클래스에 선언한 @Transactional은 해당 클래스 내부의 모든 메서드에 트랜잭션 기능을 부여합니다.
+        - 이때,  save 메서드는 @Transactional 애너테이션이 추가되어있기 때문에 `readOnly = true` 옵션인 @Transactional을 덮어쓰게 되어 `readOnly = false` 옵션으로 적용됩니다.
+            - `readOnly = true` 옵션
+                - 트랜잭션에서 데이터를 읽기만 할 때 사용됩니다.
+                - 이 속성을 사용하면 읽기 작업에 대한 최적화를 수행할 수 있습니다.
+                - 만약, 해당 트랜잭션에서 데이터를 수정하려고 하면 예외가 발생하기 때문에 주의해야합니다.
+
+- @Transactional
+    - 트랜잭션 테스트
+
+        ```java
+        @Test
+        @Transactional
+        @Rollback(value = false) // 테스트 코드에서 @Transactional 를 사용하면 테스트가 완료된 후 롤백하기 때문에 false 옵션 추가
+        @DisplayName("메모 생성 성공")
+        void test1() {
+            Memo memo = new Memo();
+            memo.setUsername("Robbert");
+            memo.setContents("@Transactional 테스트 중!");
+            em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+        }
+        ```
+
+        - [코드 스니펫] 트랜잭션 테스트 : 메모 생성 성공
+
+            ```java
+            @Test
+            @Transactional
+            @Rollback(value = false) // 테스트 코드에서 @Transactional 를 사용하면 테스트가 완료된 후 롤백하기 때문에 false 옵션 추가
+            @DisplayName("메모 생성 성공")
+            void test1() {
+                Memo memo = new Memo();
+                memo.setUsername("Robbert");
+                memo.setContents("@Transactional 테스트 중!");
+
+                em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+            }
+            ```
+
+        - 트랜잭션이 적용되어 DB 작업이 성공했습니다.
+
+    ```java
+    @Test
+    @DisplayName("메모 생성 실패")
+    void test2() {
+        Memo memo = new Memo();
+        memo.setUsername("Robbie");
+        memo.setContents("@Transactional 테스트 중!");
+
+        em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+    }
+    ```
+
+    - [코드 스니펫] 트랜잭션 테스트 : 메모 생성 실패
+
+        ```java
+        @Test
+        @DisplayName("메모 생성 실패")
+        void test2() {
+            Memo memo = new Memo();
+            memo.setUsername("Robbie");
+            memo.setContents("@Transactional 테스트 중!");
+
+            em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+        }
+        ```
+
+    - 트랜잭션이 적용되지 못해 작업이 취소되었습니다.
+    - 즉, JPA를 사용하여 DB에 데이터를 저장, 수정, 삭제 하려면 트랜잭션 적용이 반드시 필요합니다.
+        - 조회 작업은 단순하게 데이터를 읽기만 하기 때문에 트랜잭션 적용이 필수는 아닙니다.
+            - 다만 조회의 경우에도 트랜잭션 환경이 필요한 경우가 있을 수 있기 때문에
+            - 조회 작업 기능만 존재하는 메서드일 경우에만 앞서 본 예시처럼 `readOnly = true` 옵션이 설정된 @Transactional을 적용하면 좋습니다.
+
+- 영속성 컨텍스트와 트랜잭션의 생명주기
+    - 스프링 컨테이너 환경에서는 영속성 컨텍스트와 트랜잭션의 생명주기가 일치합니다.
+    - 쉽게 설명하자면 트랜잭션이 유지되는 동안은 영속성 컨텍스트도 계속 유지가 되기 때문에 영속성 컨텍스트의 기능을 사용할 수 있습니다.
+    - 따라서 앞에서 작성한 테스트 코드 메서드에 트랜잭션이 적용되지 않았기 때문에 영속성 컨텍스트가 유지되지 못해 오류가 발생했었습니다.
+    ⚠️ Spring은 어떻게 Service 부터 Repository 까지 Transaction을 유지할 수 있는 걸까요?
+    - Service의 트랜잭션이 적용된 메서드에서 Repository의 메서드를 호출할 때 무언가 처리되고 있는 것이 있는 걸까요?
+    - Spring에서는 이러한 상황에서 트랜잭션을 제어할 수 있도록 트랜잭션 전파 기능을 제공하고 있습니다.
+
+- 트랜잭션 전파
+    - @Transactional에서 트랜잭션 전파 옵션을 지정할 수 있습니다.
+    - 트랜잭션 전파의 기본 옵션은 ***REQUIRED*** 입니다.
+    - ***REQUIRED*** 옵션은 ****부모 메서드에 트랜잭션이 존재하면 자식 메서드의 트랜잭션은 **부모의 트랜잭션에 합류**하게됩니다.
+    - 트랜잭션 전파 테스트
+        - [코드 스니펫] 트랜잭션 전파 : MemoRepository
+
+            ```java
+            @Transactional
+            public Memo createMemo(EntityManager em) {
+                Memo memo = em.find(Memo.class, 1);
+                memo.setUsername("Robbie");
+                memo.setContents("@Transactional 전파 테스트 중!");
+
+                System.out.println("createMemo 메서드 종료");
+                return memo;
+            }
+            ```
+
+        - [코드 스니펫] 트랜잭션 전파 : test3
+
+            ```java
+            package com.sparta.memo;
+
+            import com.sparta.memo.entity.Memo;
+            import com.sparta.memo.repository.MemoRepository;
+            import jakarta.persistence.EntityManager;
+            import jakarta.persistence.PersistenceContext;
+            import org.junit.jupiter.api.Disabled;
+            import org.junit.jupiter.api.DisplayName;
+            import org.junit.jupiter.api.Test;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.boot.test.context.SpringBootTest;
+            import org.springframework.test.annotation.Rollback;
+            import org.springframework.transaction.annotation.Transactional;
+
+            @SpringBootTest
+            public class TransactionTest {
+
+                @PersistenceContext
+                EntityManager em;
+
+                @Autowired
+                MemoRepository memoRepository;
+
+                @Test
+                @Transactional
+                @Rollback(value = false) // 테스트 코드에서 @Transactional 를 사용하면 테스트가 완료된 후 롤백하기 때문에 false 옵션 추가
+                @DisplayName("메모 생성 성공")
+                void test1() {
+                    Memo memo = new Memo();
+                    memo.setUsername("Robbert");
+                    memo.setContents("@Transactional 테스트 중!");
+
+                    em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+                }
+
+                @Test
+                @Disabled
+                @DisplayName("메모 생성 실패")
+                void test2() {
+                    Memo memo = new Memo();
+                    memo.setUsername("Robbie");
+                    memo.setContents("@Transactional 테스트 중!");
+
+                    em.persist(memo);  // 영속성 컨텍스트에 메모 Entity 객체를 저장합니다.
+                }
+
+                @Test
+                @Transactional
+                @Rollback(value = false)
+                @DisplayName("트랜잭션 전파 테스트")
+                void test3() {
+                    memoRepository.createMemo(em);
+                    System.out.println("테스트 test3 메서드 종료");
+                }
+            }
+            ```
+        - 실행 결과 자식 메서드 createMemo가 종료될 때 update가 실행되는 것이 아니라 부모 메서드에 트랜잭션이 합류되면서 부모 메서드가 종료된 후 트랜잭션이 커밋될 때 update가 실행된 것을 확인할 수 있습니다.
+        - 부모 메서드 test3의 @Transactional @Rollback(value = false)을 주석 처리하고 다시 한번 update를 시도해보면 합류할 부모 트랜잭션이 없기 때문에
+            - 이처럼 자식 메서드가 종료된 후 트랜잭션이 커밋되면서 update가 실행된 것을 확인할 수 있습니다.
+
+## 12. Spring Data JPA란 무엇일까?
+
+- Spring Data JPA란?
+    - **Spring Data JPA**는 **JPA**를 쉽게 사용할 수 있게 만들어놓은 하나의 모듈입니다.
+        - **JPA**를 추상화시킨 **Repository** 인터페이스를 제공합니다.
+    - **Repository 인터페이스**는 **Hibernate**와 같은 **JPA구현체**를 사용해서 ****구현한 클래스를 통해 사용됩니다.
+        - 개발자들은 **Repository** 인터페이스를 통해 JPA를 간편하게 사용할 수 있게 되었습니다.
+
+- Spring Data JPA의 SimpleJpaRepository
+    - Spring Data JPA에서는 JpaRepository 인터페이스를 구현하는 클래스를 자동으로 생성해줍니다.
+        - Spring 서버가 뜰 때 JpaRepository 인터페이스를 상속받은 인터페이스가 자동으로 스캔이 되면,
+        - 해당 인터페이스의 정보를 토대로 자동으로 **SimpleJpaRepository** 클래스를 생성해 주고, 이 클래스를 Spring ‘**Bean**’으로 등록합니다.
+    - 따라서 인터페이스의 구현 클래스를 직접 작성하지 않아도 JpaRepository 인터페이스를 통해 JPA의 기능을 사용할 수 있습니다.
+
+- Spring Data JPA 사용방법
+    - JpaRepository 등록
+        - **JpaRepository**<**"@Entity 클래스", "@Id 의 데이터 타입">**를 상속받는 interface 로 선언합니다.
+            - Spring Data JPA에 의해 자동으로 Bean 등록이 되었습니다.
+            - 제네릭스의 **@Entity 클래스** 위치에 Memo Entity를 추가했기 때문에 해당 MemoRepository는 DB의 memo 테이블과 연결되어 CRUD 작업을 처리하는 인터페이스가 되었습니다.
+
+- 메모장 프로젝트 Spring Data JPA 적용
+    - MemoRepository
+
+        ```java
+        public interface MemoRepository extends JpaRepository<Memo, Long> {
+
+        }
+        ```
+
+    - save
+
+        ```java
+        public MemoResponseDto createMemo(MemoRequestDto requestDto) {
+            // RequestDto -> Entity
+            Memo memo = new Memo(requestDto);
+
+            // DB 저장
+            Memo saveMemo = memoRepository.save(memo);
+
+            // Entity -> ResponseDto
+            MemoResponseDto memoResponseDto = new MemoResponseDto(saveMemo);
+
+            return memoResponseDto;
+        }
+        ```
+        - SimpleJpaRepository의 save 메서드를 확인해보면 영속성 컨텍스트에 entity를 저장하는 코드가 작성되어있습니다.
+        - save 메서드를 사용해 데이터를 저장할 수 있습니다.
+            - 파라미터로는 저장하려는 entity 객체를 넣어주면 됩니다.
+            - 해당 메서드에 @Transactional이 적용되어있는 것을 확인할 수 있습니다.
+
+    - findAll
+
+        ```java
+        public List<MemoResponseDto> getMemos() {
+            // DB 조회
+            return memoRepository.findAll().stream().map(MemoResponseDto::new).toList();
+        }
+        ```
+        - findAll 메서드를 사용해 해당 테이블의 전체 데이터를 조회할 수 있습니다.
+
+    - findById
+
+        ```java
+        private Memo findMemo(Long id) {
+            return memoRepository.findById(id).orElseThrow(() ->
+                    new IllegalArgumentException("선택한 메모는 존재하지 않습니다.")
+            );
+        }
+        ```
+        - SimpleJpaRepository의 findById 메서드를 확인해보면 반환 타입이 Optional인 것을 확인할 수 있습니다.
+            - 파라미터로는 삭제하고자하는 Entity의 id 값을 넣어주면 됩니다.
+        - Optional<Entity 타입>을 반환 타입으로 받고 추가적으로 null을 체크하거나
+        - 위 코드와 같이 orElseThrow를 사용하여 반환 값이 null일 경우 예외를 던지도록 처리할 수 있습니다.
+        - 앞으로의 강의에서는 최대한 코드 수를 적게 하기위해 orElseThrow를 사용하겠습니다.
+        - Optional 자료
+            - [코드 스니펫] Optional
+
+                ```java
+                https://www.baeldung.com/java-optional
+                ```
+
+                [Guide To Java 8 Optional | Baeldung](https://www.baeldung.com/java-optional)
+
+    - update
+        ```java
+        @Transactional
+        public Long updateMemo(Long id, MemoRequestDto requestDto) {
+            // 해당 메모가 DB에 존재하는지 확인
+            Memo memo = findMemo(id);
+
+            // memo 내용 수정
+            memo.update(requestDto);
+
+            return id;
+        }
+        ```
+
+        - SimpleJpaRepository에 update라는 메서드는 존재하지 않습니다.
+        - 따라서 위 코드처럼 영속성 컨텍스트의 변경감지를 통해 update를 진행하겠습니다.
+        - 변경감지가 적용되기 위해 해당 메서드에 @Transactional을 추가하였습니다.
+
+    - delete
+
+        ```java
+        public Long deleteMemo(Long id) {
+            // 해당 메모가 DB에 존재하는지 확인
+            Memo memo = findMemo(id);
+
+            // memo 삭제
+            memoRepository.delete(memo);
+
+            return id;
+        }
+        ```
+        - delete 메서드를 사용해 해당 Entity(데이터)를 테이블에서 삭제할 수 있습니다.
+        - 파라미터로는 삭제하려는 entity 객체를 넣어주면 됩니다.
+        - delete 메서드에 @Transactional이 적용되어있는 것을 확인할 수 있습니다.
+
+    - MemoService
+        - [코드 스니펫] MemoService
+
+            ```java
+            package com.sparta.memo.service;
+
+            import com.sparta.memo.dto.MemoRequestDto;
+            import com.sparta.memo.dto.MemoResponseDto;
+            import com.sparta.memo.entity.Memo;
+            import com.sparta.memo.repository.MemoRepository;
+            import org.springframework.stereotype.Service;
+            import org.springframework.transaction.annotation.Transactional;
+
+            import java.util.List;
+
+            @Service
+            public class MemoService {
+
+                private final MemoRepository memoRepository;
+
+                public MemoService(MemoRepository memoRepository) {
+                    this.memoRepository = memoRepository;
+                }
+
+                public MemoResponseDto createMemo(MemoRequestDto requestDto) {
+                    // RequestDto -> Entity
+                    Memo memo = new Memo(requestDto);
+
+                    // DB 저장
+                    Memo saveMemo = memoRepository.save(memo);
+
+                    // Entity -> ResponseDto
+                    MemoResponseDto memoResponseDto = new MemoResponseDto(saveMemo);
+
+                    return memoResponseDto;
+                }
+
+                public List<MemoResponseDto> getMemos() {
+                    // DB 조회
+                    return memoRepository.findAll().stream().map(MemoResponseDto::new).toList();
+                }
+
+                @Transactional
+                public Long updateMemo(Long id, MemoRequestDto requestDto) {
+                    // 해당 메모가 DB에 존재하는지 확인
+                    Memo memo = findMemo(id);
+
+                    // memo 내용 수정
+                    memo.update(requestDto);
+
+                    return id;
+                }
+
+                public Long deleteMemo(Long id) {
+                    // 해당 메모가 DB에 존재하는지 확인
+                    Memo memo = findMemo(id);
+
+                    // memo 삭제
+                    memoRepository.delete(memo);
+
+                    return id;
+                }
+
+                private Memo findMemo(Long id) {
+                    return memoRepository.findById(id).orElseThrow(() ->
+                            new IllegalArgumentException("선택한 메모는 존재하지 않습니다.")
+                    );
+                }
+            }
+            ```
+
+## 13. JPA Auditing 적용하기
+
+- Timestamped
+    📌 데이터의 생성(created_at), 수정(modified_at) 시간은
+    포스팅, 게시글, 댓글 등 다양한 데이터에 매우 자주 활용됩니다.
+    각각의 Entity의 생성 수정 시간을 매번 작성하는건 너무 비효율적입니다.
+
+    ```java
+    @Getter
+    @MappedSuperclass
+    @EntityListeners(AuditingEntityListener.class)
+    public abstract class Timestamped {
+
+        @CreatedDate
+        @Column(updatable = false)
+        @Temporal(TemporalType.TIMESTAMP)
+        private LocalDateTime createdAt;
+
+        @LastModifiedDate
+        @Column
+        @Temporal(TemporalType.TIMESTAMP)
+        private LocalDateTime modifiedAt;
+    }
+    ```
+
+    - **Spring Data JPA**에서는 시간에 대해서 자동으로 값을 넣어주는 기능인 JPA Auditing을 제공하고 있습니다.
+    - **@MappedSuperclass**
+        - JPA Entity 클래스들이 해당 추상 클래스를 상속할 경우 createdAt, modifiedAt 처럼 추상 클래스에 선언한 멤버변수를 컬럼으로 인식할 수 있습니다.
+    - **@EntityListeners(AuditingEntityListener.class)**
+        - 해당 클래스에 Auditing 기능을 포함시켜 줍니다.
+    - **@CreatedDate**
+        - Entity 객체가 생성되어 저장될 때 시간이 자동으로 저장됩니다.
+        - 최초 생성 시간이 저장되고 그 이후에는 수정되면 안되기 때문에 `updatable = false` 옵션을 추가합니다.
+    - **@LastModifiedDate**
+        - 조회한 Entity 객체의 값을 변경할 때 변경된 시간이 자동으로 저장됩니다.
+        - 처음 생성 시간이 저장된 이후 변경이 일어날 때마다 해당 변경시간으로 업데이트됩니다.
+    - **@Temporal**
+        - 날짜 타입(java.util.Date, java.util.Calendar)을 매핑할 때 사용합니다.
+        - DB에는 Date(날짜), Time(시간), Timestamp(날짜와 시간)라는 세 가지 타입이 별도로 존재합니다.
+            - **DATE : ex) 2023-01-01**
+            - **TIME : ex) 20:21:14**
+            - **TIMESTAMP : ex) 2023-01-01 20:22:38.771000**
+
+    ⚠️ `@SpringBootApplication` 이 있는 class에 `@EnableJpaAuditing` 추가!
+    - JPA Auditing 기능을 사용하겠다는 정보를 전달해주기 위해 `@EnableJpaAuditing` 을 추가해야합니다.
+
+- 메모장 프로젝트에 JPA Auditing 적용
+    1. Timestamped 생성
+        - [코드 스니펫] entity > Timestamped
+
+            ```java
+            package com.sparta.memo.entity;
+
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import org.springframework.data.annotation.CreatedDate;
+            import org.springframework.data.annotation.LastModifiedDate;
+            import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+            import java.time.LocalDateTime;
+
+            @Getter
+            @MappedSuperclass
+            @EntityListeners(AuditingEntityListener.class)
+            public abstract class Timestamped {
+
+                @CreatedDate
+                @Column(updatable = false)
+                @Temporal(TemporalType.TIMESTAMP)
+                private LocalDateTime createdAt;
+
+                @LastModifiedDate
+                @Column
+                @Temporal(TemporalType.TIMESTAMP)
+                private LocalDateTime modifiedAt;
+            }
+            ```
+
+    2. @EnableJpaAuditing 애너테이션을 추가합니다.
+    3. 적용하고자하는 Entity 클래스에서 Timestamped를 상속받습니다.
+
+## 14. Query Methods란 무엇일까?
+
+- Query Methods란?
+    - Spring Data JPA에서는 메서드 이름으로 SQL을 생성할 수 있는 Query Methods 기능을 제공합니다.
+    - JpaRepository 인터페이스에서 해당 인터페이스와 매핑되어있는 테이블에 요청하고자하는 SQL을 메서드 이름을 사용하여 선언할 수 있습니다.
+        - [코드 스니펫] MemoRepository
+
+            ```java
+            package com.sparta.memo.repository;
+
+            import com.sparta.memo.entity.Memo;
+            import org.springframework.data.jpa.repository.JpaRepository;
+
+            import java.util.List;
+
+            public interface MemoRepository extends JpaRepository<Memo, Long> {
+                List<Memo> findAllByOrderByModifiedAtDesc();
+            }
+            ```
+
+    - **SimpleJpaRepository** 클래스가 생성될 때 위처럼 직접 선언한 JpaRepository 인터페이스의 모든 메서드를 자동으로 구현해줍니다.
+        - JpaRepository 인터페이스의 메서드 즉, [Query Methods](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-creation)는 개발자가 이미 정의 되어있는 규칙에 맞게 메서드를 선언하면 해당 메서드 이름을 분석하여 SimpleJpaRepository에서 구현이 됩니다.
+        - 따라서 우리는 인터페이스에 필요한 SQL에 해당하는 메서드 이름 패턴으로 메서드를 선언 하기만 하면 따로 구현하지 않아도 사용할 수 있습니다.
+    - `findAllByOrderByModifiedAtDesc` 해당 메서드 이름은 Memo 테이블에서 ModifiedAt 즉, 수정 시간을 기준으로 전체 데이터를 내림차순으로 가져오는 SQL을 실행하는 메서드를 생성할 수 있습니다.
+    - `List<Memo> findAllByUsername(String username);`
+        - 이렇게 Query Method를 선언했을 경우 `ByUsername` 에 값을 전달해줘야하기 때문에 파라미터에 해당 값의 타입과 변수명을 선언해줍니다.
+        - 즉, Query Methods 는 메서드의 파라미터를 통해 SQL에 필요한 값을 동적으로 받아 처리할 수 있습니다.
+
+- 메모장 프로젝트 Query Methods 적용
+    - 최신 메모가 가장 상단에 나올 수 있도록 수정
+
+        ```java
+        public List<MemoResponseDto> getMemos() {
+            // DB 조회
+            return memoRepository.findAllByOrderByModifiedAtDesc().stream().map(MemoResponseDto::new).toList();
+        }
+        ```
