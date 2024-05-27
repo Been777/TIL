@@ -1,0 +1,620 @@
+# 내일배움캠프 240526 TIL
+Java 29일차
+인증과 인가
+-------------------------------------------------------------------------------
+
+## 05. JWT란 무엇일까?
+
+- JWT 란?
+    🍪 JWT(Json Web Token)란 JSON 포맷을 이용하여 사용자에 대한 속성을 저장하는 Claim 기반의 Web Token 입니다. 즉, 토큰의 한 종류라고 생각하시면 됩니다.
+    일반적으로 쿠키 저장소를 사용하여 JWT를 저장합니다.
+
+- JWT 사용 이유
+    1. 서버가 1대인 경우
+        - Session1 이 모든 Client의 로그인 정보를 소유하고 있습니다.
+
+    2. 서버가 2대 이상인 경우
+        - 서버의 대용량 트래픽 처리를 위해 서버 2대 이상 운영이 필요할 수 있습니다.
+        - Session 마다 다른 Client 로그인 정보를 가지고 있을 수 있습니다.
+            - Session1: Client1, Client2, Client3
+            - Session2: Client4
+            - Session3: Client5, Client6
+        - 만약 Client 1의 로그인 정보를 가지고 있지 않은 Sever2 나 Server3 에 API 요청을 하게되면 문제가 발생하지 않을까?
+            - 해결방법
+                1) Sticky Session: Client 마다 요청 Server 고정합니다.
+                2) 세션 저장소 생성하여 모든 세션을 저장합니다.
+
+    3. 세션 저장소 생성
+        - Session storage 가 모든 Client 의 로그인 정보 소유하고 있기 때문에 모든 서버에서 모든 Client의 API 요청을 처리할 수 있습니다.
+
+    1. JWT 사용
+        - 로그인 정보를 **Server** 에 저장하지 않고, **Client** 에 로그인 정보를 JWT 로 암호화하여 저장 → JWT 통해 인증/인가
+        - 모든 서버에서 **동일한 Secret Key** 소유합니다.
+        - Secret Key 통한 암호화 / 위조 검증 (복호화 시)
+        - JWT 장/단점
+            1. 장점
+                - 동시 접속자가 많을 때 서버 측 부하 낮춤
+                - Client, Sever 가 다른 도메인을 사용할 때
+                    - 예) 카카오 OAuth2 로그인 시 JWT Token 사용
+            2. 단점
+                - 구현의 복잡도 증가
+                - JWT 에 담는 내용이 커질 수록 네트워크 비용 증가 (클라이언트 → 서버)
+                - 기 생성된 JWT 를 일부만 만료시킬 방법이 없음
+                - Secret key 유출 시 JWT 조작 가능
+
+- JWT 사용 흐름
+    1. Client 가 username, password 로 로그인 성공 시
+        1. 서버에서 "로그인 정보" → JWT 로 **암호화** (Secret Key 사용)
+        2. 서버에서 직접 쿠키를 생성해 **JWT**를 담아 Client 응답에 전달
+            1. JWT 전달방법은 개발자가 정함
+                - 응답 **Header**에 아래 **형태**로 JWT 전달
+
+                    ```java
+                    Cookie cookie = new Cookie(AUTHORIZATION_HEADER, token); // Name-Value
+                    cookie.setPath("/");
+
+                    // Response 객체에 Cookie 추가
+                    res.addCookie(cookie);
+                    ```
+
+        3. 브라우저 쿠키 저장소에 자동으로 JWT 저장됨
+
+    2. Client 에서 JWT 통해 인증방법
+        1. 서버에서 API 요청 시마다 쿠키에 포함된 JWT를 찾아서 사용
+            - 쿠키를 찾는 코드
+
+            ```java
+            // HttpServletRequest 에서 Cookie Value : JWT 가져오기
+            public String getTokenFromRequest(HttpServletRequest req) {
+                Cookie[] cookies = req.getCookies();
+                if(cookies != null) {
+                    for (Cookie cookie : cookies) {
+                        if (cookie.getName().equals(AUTHORIZATION_HEADER)) {
+                            try {
+                                return URLDecoder.decode(cookie.getValue(), "UTF-8"); // Encode 되어 넘어간 Value 다시 Decode
+                            } catch (UnsupportedEncodingException e) {
+                                return null;
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+            ```
+
+            - 쿠키에 담긴 정보가 여러 개일 수 있기 때문에 그 중 이름이 JWT가 담긴 쿠키의 이름과 동일한지 확인하여 JWT를 가져옵니다.
+
+        2. Server
+            1. Client 가 전달한 **JWT 위조 여부 검증** (Secret Key 사용)
+            2. JWT 유효기간이 지나지 않았는지 검증
+            3. 검증 성공시,
+                1. JWT → 에서 사용자 정보를 가져와 확인
+
+                    ex) **GET /api/products** : JWT 보낸 사용자의 관심상품 목록 조회
+
+- JWT 구조
+    - JWT 는 누구나 평문으로 복호화 가능합니다.
+    - 하지만 Secret Key 가 없으면 JWT 수정 불가능합니다.
+        → 결국 JWT 는 **Read only 데이터입니다.**
+        - **[코드스니펫] [jwt.io](https://jwt.io/)**
+
+            ```
+            https://jwt.io/
+            ```
+
+    1. Header
+
+        ```json
+        {
+          "alg": "HS256",
+          "typ": "JWT"
+        }
+        ```
+
+    2. Payload
+
+        ```json
+        {
+          "sub": "1234567890",
+          "username": "카즈하",
+          "admin": true
+        }
+        ```
+
+    3. Signature
+
+        ```json
+        HMACSHA256(
+          base64UrlEncode(header) + "." +
+          base64UrlEncode(payload),
+          secret)
+        ```
+
+    - Payload에 실제 유저의 정보가 들어있고, HEADER와 VERIFY SIGNATURE부분은 암호화 관련된 정보 양식이라고 생각하시면 됩니다.
+
+## 06. JWT 다루기
+
+- 프로젝트 설정
+    - **[코드스니펫] JWT dependency 추가하기**
+
+        ```groovy
+        // JWT
+        compileOnly group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.11.5'
+        runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-impl', version: '0.11.5'
+        runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-jackson', version: '0.11.5'
+        ```
+
+    - **[코드스니펫] application.properties**
+
+        ```groovy
+        jwt.secret.key=7Iqk7YyM66W07YOA7L2U65Sp7YG065+9U3ByaW5n6rCV7J2Y7Yqc7YSw7LWc7JuQ67mI7J6F64uI64ukLg==
+        ```
+
+- JwtUtil 만들기
+    📌 Util 클래스란 특정 매개 변수(파라미터)에 대한 작업을 수행하는 메서드들이 존재하는 클래스를 뜻합니다.
+    쉽게 설명하자면 다른 객체에 의존하지 않고 하나의 모듈로서 동작하는 클래스라고 생각하시면 좋습니다.
+    우리는 JWT 관련 기능들을 가진 JwtUtil이라는 클래스를 만들어 JWT 관련 기능을 수행시킬 예정입니다.
+    <JWT 관련 기능>
+    1. JWT 생성
+    2. 생성된 JWT를 Cookie에 저장
+    3. Cookie에 들어있던 JWT 토큰을 Substring
+    4. JWT 검증
+    5. JWT에서 사용자 정보 가져오기
+
+    - 토큰 생성에 필요한 데이터
+
+        ```java
+        // Header KEY 값
+        public static final String AUTHORIZATION_HEADER = "Authorization";
+        // 사용자 권한 값의 KEY
+        public static final String AUTHORIZATION_KEY = "auth";
+        // Token 식별자
+        public static final String BEARER_PREFIX = "Bearer ";
+        // 토큰 만료시간
+        private final long TOKEN_TIME = 60 * 60 * 1000L; // 60분
+
+        @Value("${jwt.secret.key}") // Base64 Encode 한 SecretKey
+        private String secretKey;
+        private Key key;
+        private final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
+
+        // 로그 설정
+        public static final Logger logger = LoggerFactory.getLogger("JWT 관련 로그");
+
+        @PostConstruct
+        public void init() {
+            byte[] bytes = Base64.getDecoder().decode(secretKey);
+            key = Keys.hmacShaKeyFor(bytes);
+        }
+        ```
+
+        - [코드 스니펫] JWT 데이터
+
+            ```java
+            package com.sparta.springauth.jwt;
+
+            import io.jsonwebtoken.SignatureAlgorithm;
+            import io.jsonwebtoken.security.Keys;
+            import jakarta.annotation.PostConstruct;
+            import org.slf4j.Logger;
+            import org.slf4j.LoggerFactory;
+            import org.springframework.beans.factory.annotation.Value;
+            import org.springframework.stereotype.Component;
+
+            import java.security.Key;
+            import java.util.Base64;
+
+            @Component
+            public class JwtUtil {
+                // Header KEY 값
+                public static final String AUTHORIZATION_HEADER = "Authorization";
+                // 사용자 권한 값의 KEY
+                public static final String AUTHORIZATION_KEY = "auth";
+                // Token 식별자
+                public static final String BEARER_PREFIX = "Bearer ";
+                // 토큰 만료시간
+                private final long TOKEN_TIME = 60 * 60 * 1000L; // 60분
+
+                @Value("${jwt.secret.key}") // Base64 Encode 한 SecretKey
+                private String secretKey;
+                private Key key;
+                private final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
+
+                // 로그 설정
+                public static final Logger logger = LoggerFactory.getLogger("JWT 관련 로그");
+
+                @PostConstruct
+                public void init() {
+                    byte[] bytes = Base64.getDecoder().decode(secretKey);
+                    key = Keys.hmacShaKeyFor(bytes);
+                }
+
+            }
+            ```
+
+        - Base64로 Encode된 Secret Key를 properties에 작성해두고 @Value를 통해 가져옵니다.
+        - JWT를 생성할 때 가져온 Secret Key로 암호화합니다.
+            - 이때 Encode된 Secret Key를 Decode 해서 사용합니다.
+            - Key는 Decode된 Secret Key를 담는 객체입니다.
+            - @PostConstruct는 딱 한 번만 받아오면 되는 값을 사용 할 때마다 요청을 새로 호출하는 실수를 방지하기 위해 사용됩니다.
+                - JwtUtil 클래스의 생성자 호출 이후에 실행되어 Key 필드에 값을 주입 해줍니다.
+        - 암호화 알고리즘은 HS256 알고리즘을 사용합니다.
+        - Bearer 란 JWT 혹은 OAuth에 대한 토큰을 사용한다는 표시입니다.
+        - 로깅이란 애플리케이션이 동작하는 동안 프로젝트의 상태나 동작 정보를 시간순으로 기록하는 것을 의미합니다.
+            - 우리는 Logback 로깅 프레임워크를 사용해서 로깅을 진행하도록 하겠습니다.
+        📌 사용자의 권한의 종류를 Enum을 사용해서 관리합니다.
+        - JWT를 생성할 때 사용자의 정보로 해당 사용자의 권한을 넣어줄 때 사용합니다.
+
+        ```java
+        public enum UserRoleEnum {
+            USER(Authority.USER),  // 사용자 권한
+            ADMIN(Authority.ADMIN);  // 관리자 권한
+
+            private final String authority;
+
+            UserRoleEnum(String authority) {
+                this.authority = authority;
+            }
+
+            public String getAuthority() {
+                return this.authority;
+            }
+
+            public static class Authority {
+                public static final String USER = "ROLE_USER";
+                public static final String ADMIN = "ROLE_ADMIN";
+            }
+        }
+        ```
+
+        - [코드 스니펫] entity > UserRoleEnum
+
+            ```java
+            package com.sparta.springauth.entity;
+
+            public enum UserRoleEnum {
+                USER(Authority.USER),  // 사용자 권한
+                ADMIN(Authority.ADMIN);  // 관리자 권한
+
+                private final String authority;
+
+                UserRoleEnum(String authority) {
+                    this.authority = authority;
+                }
+
+                public String getAuthority() {
+                    return this.authority;
+                }
+
+                public static class Authority {
+                    public static final String USER = "ROLE_USER";
+                    public static final String ADMIN = "ROLE_ADMIN";
+                }
+            }
+            ```
+
+    - 1.JWT 생성
+
+        ```java
+        // 토큰 생성
+        public String createToken(String username, UserRoleEnum role) {
+            Date date = new Date();
+
+            return BEARER_PREFIX +
+                    Jwts.builder()
+                            .setSubject(username) // 사용자 식별자값(ID)
+                            .claim(AUTHORIZATION_KEY, role) // 사용자 권한
+                            .setExpiration(new Date(date.getTime() + TOKEN_TIME)) // 만료 시간
+                            .setIssuedAt(date) // 발급일
+                            .signWith(key, signatureAlgorithm) // 암호화 알고리즘
+                            .compact();
+        }
+        ```
+
+        - [코드 스니펫] JWT 생성
+
+            ```java
+            // 토큰 생성
+            public String createToken(String username, UserRoleEnum role) {
+                Date date = new Date();
+
+                return BEARER_PREFIX +
+                        Jwts.builder()
+                                .setSubject(username) // 사용자 식별자값(ID)
+                                .claim(AUTHORIZATION_KEY, role) // 사용자 권한
+                                .setExpiration(new Date(date.getTime() + TOKEN_TIME)) // 만료 시간
+                                .setIssuedAt(date) // 발급일
+                                .signWith(key, signatureAlgorithm) // 암호화 알고리즘
+                                .compact();
+            }
+            ```
+
+        - JWT의 subject에 사용자의 식별값 즉, ID를 넣습니다.
+        - JWT에 사용자의 권한 정보를 넣습니다. key-value 형식으로 key 값을 통해 확인할 수 있습니다.
+        - 토큰 만료시간을 넣습니다. ms 기준입니다.
+        - issuedAt에 발급일을 넣습니다.
+        - signWith에 secretKey 값을 담고있는 key와 암호화 알고리즘을 값을 넣어줍니다.
+            - ket와 암호화 알고리즘을 사용하여 JWT를 암호화합니다.
+
+    - 2.JWT Cookie에 저장
+
+        ```java
+        // JWT Cookie 에 저장
+        public void addJwtToCookie(String token, HttpServletResponse res) {
+            try {
+                token = URLEncoder.encode(token, "utf-8").replaceAll("\\+", "%20"); // Cookie Value 에는 공백이 불가능해서 encoding 진행
+
+                Cookie cookie = new Cookie(AUTHORIZATION_HEADER, token); // Name-Value
+                cookie.setPath("/");
+
+                // Response 객체에 Cookie 추가
+                res.addCookie(cookie);
+            } catch (UnsupportedEncodingException e) {
+                logger.error(e.getMessage());
+            }
+        }
+        ```
+
+        - [코드 스니펫] JWT Cookie에 저장
+
+            ```java
+            // JWT Cookie 에 저장
+            public void addJwtToCookie(String token, HttpServletResponse res) {
+                try {
+                    token = URLEncoder.encode(token, "utf-8").replaceAll("\\+", "%20"); // Cookie Value 에는 공백이 불가능해서 encoding 진행
+
+                    Cookie cookie = new Cookie(AUTHORIZATION_HEADER, token); // Name-Value
+                    cookie.setPath("/");
+
+                    // Response 객체에 Cookie 추가
+                    res.addCookie(cookie);
+                } catch (UnsupportedEncodingException e) {
+                    logger.error(e.getMessage());
+                }
+            }
+            ```
+
+    - 3.받아온 Cookie의 Value인 JWT 토큰 substring
+
+        ```java
+        // JWT 토큰 substring
+        public String substringToken(String tokenValue) {
+            if (StringUtils.hasText(tokenValue) && tokenValue.startsWith(BEARER_PREFIX)) {
+                return tokenValue.substring(7);
+            }
+            logger.error("Not Found Token");
+            throw new NullPointerException("Not Found Token");
+        }
+        ```
+
+        - [코드 스니펫] JWT 토큰 substring
+
+            ```java
+            // JWT 토큰 substring
+            public String substringToken(String tokenValue) {
+                if (StringUtils.hasText(tokenValue) && tokenValue.startsWith(BEARER_PREFIX)) {
+                    return tokenValue.substring(7);
+                }
+                logger.error("Not Found Token");
+                throw new NullPointerException("Not Found Token");
+            }
+            ```
+
+        - StringUtils.hasText를 사용하여 공백, null을 확인하고 startsWith을 사용하여 토큰의 시작값이 Bearer이 맞는지 확인합니다.
+        - 맞다면 순수 JWT를 반환하기 위해 substring을 사용하여 Bearer을 잘라냅니다.
+
+    - 4.JWT 검증
+
+        ```java
+        // 토큰 검증
+        public boolean validateToken(String token) {
+            try {
+                Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+                return true;
+            } catch (SecurityException | MalformedJwtException | SignatureException e) {
+                logger.error("Invalid JWT signature, 유효하지 않는 JWT 서명 입니다.");
+            } catch (ExpiredJwtException e) {
+                logger.error("Expired JWT token, 만료된 JWT token 입니다.");
+            } catch (UnsupportedJwtException e) {
+                logger.error("Unsupported JWT token, 지원되지 않는 JWT 토큰 입니다.");
+            } catch (IllegalArgumentException e) {
+                logger.error("JWT claims is empty, 잘못된 JWT 토큰 입니다.");
+            }
+            return false;
+        }
+        ```
+
+        - [코드 스니펫] JWT 검증
+
+            ```java
+            // 토큰 검증
+            public boolean validateToken(String token) {
+                try {
+                    Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+                    return true;
+                } catch (SecurityException | MalformedJwtException | SignatureException e) {
+                    logger.error("Invalid JWT signature, 유효하지 않는 JWT 서명 입니다.");
+                } catch (ExpiredJwtException e) {
+                    logger.error("Expired JWT token, 만료된 JWT token 입니다.");
+                } catch (UnsupportedJwtException e) {
+                    logger.error("Unsupported JWT token, 지원되지 않는 JWT 토큰 입니다.");
+                } catch (IllegalArgumentException e) {
+                    logger.error("JWT claims is empty, 잘못된 JWT 토큰 입니다.");
+                }
+                return false;
+            }
+            ```
+
+        - `Jwts.parserBuilder()` 를 사용하여 JWT를 파싱할 수 있습니다.
+        - JWT가 위변조되지 않았는지 secretKey(key)값을 넣어 확인합니다.
+
+    - 5.JWT에서 사용자 정보 가져오기
+
+        ```java
+        // 토큰에서 사용자 정보 가져오기
+        public Claims getUserInfoFromToken(String token) {
+            return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+        }
+        ```
+
+        - [코드 스니펫] JWT에서 사용자 정보 가져오기
+
+            ```java
+            // 토큰에서 사용자 정보 가져오기
+            public Claims getUserInfoFromToken(String token) {
+                return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+            }
+            ```
+
+        - JWT의 구조 중 **Payload** 부분에는 토큰에 담긴 정보가 들어있습니다.
+        - 여기에 담긴 정보의 한 ‘조각’ 을 클레임(**claim**) 이라고 부르고, 이는 key-value 의 한 쌍으로 이뤄져있습니다. 토큰에는 여러개의 클레임 들을 넣을 수 있습니다.
+        - `Jwts.parserBuilder()` 와 secretKey를 사용하여 JWT의 Claims를 가져와 담겨 있는 사용자의 정보를 사용합니다.
+
+    - JwtUtil 완성
+        - **[코드 스니펫] JwtUtil**
+
+            ```java
+            package com.sparta.springauth.jwt;
+
+            import com.sparta.springauth.entity.UserRoleEnum;
+            import io.jsonwebtoken.*;
+            import io.jsonwebtoken.security.Keys;
+            import jakarta.annotation.PostConstruct;
+            import jakarta.servlet.http.Cookie;
+            import jakarta.servlet.http.HttpServletResponse;
+            import org.slf4j.Logger;
+            import org.slf4j.LoggerFactory;
+            import org.springframework.beans.factory.annotation.Value;
+            import org.springframework.stereotype.Component;
+            import org.springframework.util.StringUtils;
+
+            import java.io.UnsupportedEncodingException;
+            import java.net.URLEncoder;
+            import java.security.Key;
+            import java.util.Base64;
+            import java.util.Date;
+
+            @Component
+            public class JwtUtil {
+                // Header KEY 값
+                public static final String AUTHORIZATION_HEADER = "Authorization";
+                // 사용자 권한 값의 KEY
+                public static final String AUTHORIZATION_KEY = "auth";
+                // Token 식별자
+                public static final String BEARER_PREFIX = "Bearer ";
+                // 토큰 만료시간
+                private final long TOKEN_TIME = 60 * 60 * 1000L; // 60분
+
+                @Value("${jwt.secret.key}") // Base64 Encode 한 SecretKey
+                private String secretKey;
+                private Key key;
+                private final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
+
+                // 로그 설정
+                public static final Logger logger = LoggerFactory.getLogger("JWT 관련 로그");
+
+                @PostConstruct
+                public void init() {
+                    byte[] bytes = Base64.getDecoder().decode(secretKey);
+                    key = Keys.hmacShaKeyFor(bytes);
+                }
+
+                // 토큰 생성
+                public String createToken(String username, UserRoleEnum role) {
+                    Date date = new Date();
+
+                    return BEARER_PREFIX +
+                            Jwts.builder()
+                                    .setSubject(username) // 사용자 식별자값(ID)
+                                    .claim(AUTHORIZATION_KEY, role) // 사용자 권한
+                                    .setExpiration(new Date(date.getTime() + TOKEN_TIME)) // 만료 시간
+                                    .setIssuedAt(date) // 발급일
+                                    .signWith(key, signatureAlgorithm) // 암호화 알고리즘
+                                    .compact();
+                }
+
+                // JWT Cookie 에 저장
+                public void addJwtToCookie(String token, HttpServletResponse res) {
+                    try {
+                        token = URLEncoder.encode(token, "utf-8").replaceAll("\\+", "%20"); // Cookie Value 에는 공백이 불가능해서 encoding 진행
+
+                        Cookie cookie = new Cookie(AUTHORIZATION_HEADER, token); // Name-Value
+                        cookie.setPath("/");
+
+                        // Response 객체에 Cookie 추가
+                        res.addCookie(cookie);
+                    } catch (UnsupportedEncodingException e) {
+                        logger.error(e.getMessage());
+                    }
+                }
+
+                // JWT 토큰 substring
+                public String substringToken(String tokenValue) {
+                    if (StringUtils.hasText(tokenValue) && tokenValue.startsWith(BEARER_PREFIX)) {
+                        return tokenValue.substring(7);
+                    }
+                    logger.error("Not Found Token");
+                    throw new NullPointerException("Not Found Token");
+                }
+
+                // 토큰 검증
+                public boolean validateToken(String token) {
+                    try {
+                        Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+                        return true;
+                    } catch (SecurityException | MalformedJwtException | SignatureException e) {
+                        logger.error("Invalid JWT signature, 유효하지 않는 JWT 서명 입니다.");
+                    } catch (ExpiredJwtException e) {
+                        logger.error("Expired JWT token, 만료된 JWT token 입니다.");
+                    } catch (UnsupportedJwtException e) {
+                        logger.error("Unsupported JWT token, 지원되지 않는 JWT 토큰 입니다.");
+                    } catch (IllegalArgumentException e) {
+                        logger.error("JWT claims is empty, 잘못된 JWT 토큰 입니다.");
+                    }
+                    return false;
+                }
+
+                // 토큰에서 사용자 정보 가져오기
+                public Claims getUserInfoFromToken(String token) {
+                    return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+                }
+            }
+            ```
+
+- JWT 테스트
+    - [코드 스니펫] JWT 테스트
+
+        ```java
+        @GetMapping("/create-jwt")
+        public String createJwt(HttpServletResponse res) {
+            // Jwt 생성
+            String token = jwtUtil.createToken("Robbie", UserRoleEnum.USER);
+
+            // Jwt 쿠키 저장
+            jwtUtil.addJwtToCookie(token, res);
+
+            return "createJwt : " + token;
+        }
+
+        @GetMapping("/get-jwt")
+        public String getJwt(@CookieValue(JwtUtil.AUTHORIZATION_HEADER) String tokenValue) {
+            // JWT 토큰 substring
+            String token = jwtUtil.substringToken(tokenValue);
+
+            // 토큰 검증
+            if(!jwtUtil.validateToken(token)){
+                throw new IllegalArgumentException("Token Error");
+            }
+
+            // 토큰에서 사용자 정보 가져오기
+            Claims info = jwtUtil.getUserInfoFromToken(token);
+            // 사용자 username
+            String username = info.getSubject();
+            System.out.println("username = " + username);
+            // 사용자 권한
+            String authority = (String) info.get(JwtUtil.AUTHORIZATION_KEY);
+            System.out.println("authority = " + authority);
+
+            return "getJwt : " + username + ", " + authority;
+        }
+        ```
