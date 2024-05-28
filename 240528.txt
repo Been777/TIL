@@ -1,0 +1,39 @@
+# 내일배움캠프 240528 TIL
+Java 31일차
+숙련주차 개인과제
+-------------------------------------------------------------------------------
+
+로그인 후 에러
+
+이번 에러는 코드도 잘 작성되었고 아무 문제가 없었다 그래서 경로 문제인거 같았다
+
+구글링해서 찾아보니 비슷한 케이스가 있었다 경로 문제가 맞는듯 하다
+
+[THYMELEAF][http-nio-8080-exec-4] Exception processing template "index": Error resolving template [index], template might not exist or might not be accessible by any of the configured Template Resolvers
+
+Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: org.thymeleaf.exceptions.TemplateInputException: Error resolving template [index], template might not exist or might not be accessible by any of the configured Template Resolvers] with root cause
+
+로그인으로 넘어가는 페이지 이니 컨트롤러에
+@PostMapping("/user/login")
+    public String login(LoginRequestDto requestDto, HttpServletResponse res) {
+        try {
+            userService.login(requestDto, res);
+        } catch (Exception e) {
+            return "redirect:/api/user/login-page?error";
+        }
+
+        return "redirect:/";
+
+코드를 보았다. 별 문제가 없다
+
+html쪽 문제인가 하고 보았더니 index.html 이름이 잘못되었다.
+(공백)index.html
+login.html
+signup.html
+되어있던 이름을
+index.html
+login.html
+signup.html
+로 index.html 공백 부분을 지우고 이름 변경하였다.
+
+문제 해결 ~
