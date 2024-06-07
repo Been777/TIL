@@ -1,0 +1,807 @@
+# 내일배움캠프 240605 TIL
+Java 37일차
+사용자 관리하기 (10~12)
+-------------------------------------------------------------------------------
+
+## 10. 'Spring Security' 프레임워크
+- Spring Security 적용
+    👉 'Spring Security' 프레임워크는 Spring 서버에 필요한 인증 및 인가를 위해 많은 기능을 제공해 줌으로써 개발의 수고를 덜어 줍니다. 마치 'Spring' 프레임워크가 웹 서버 구현에 편의를 제공해 주는 것과 같습니다.
+    - 'Spring Security' 프레임워크 추가
+
+        ```groovy
+        // Security
+        implementation 'org.springframework.boot:spring-boot-starter-security'
+        ```
+
+        - 이미 추가되어있습니다.
+    - 'Spring Security' 활성화
+        - Spring Security 제외 해제
+
+            ```java
+            @SpringBootApplication
+            public class SpringAuthApplication {
+
+            	public static void main(String[] args) {
+            		SpringApplication.run(SpringAuthApplication.class, args);
+            	}
+
+            }
+            ```
+
+        - 'Spring Security' 설정
+            - **[코드 스니펫]  WebSecurityConfig**
+
+                ```java
+                package com.sparta.springauth.config;
+
+                import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
+                import org.springframework.context.annotation.Bean;
+                import org.springframework.context.annotation.Configuration;
+                import org.springframework.security.config.Customizer;
+                import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+                import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+                import org.springframework.security.web.SecurityFilterChain;
+
+                @Configuration
+                @EnableWebSecurity // Spring Security 지원을 가능하게 함
+                public class WebSecurityConfig {
+
+                    @Bean
+                    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                        // CSRF 설정
+                        http.csrf((csrf) -> csrf.disable());
+
+                        http.authorizeHttpRequests((authorizeHttpRequests) ->
+                                authorizeHttpRequests
+                                        .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll() // resources 접근 허용 설정
+                                        .anyRequest().authenticated() // 그 외 모든 요청 인증처리
+                        );
+
+                        // 로그인 사용
+                        http.formLogin(Customizer.withDefaults());
+
+                        return http.build();
+                    }
+                }
+                ```
+
+        - LoggingFilter, AuthFilter 등록 해제
+            - **LoggingFilter**
+
+                ```java
+                @Slf4j(topic = "LoggingFilter")
+                //@Component
+                @Order(1)
+                public class LoggingFilter implements Filter {
+                    @Override
+                    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+                        // 전처리
+                        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+                        String url = httpServletRequest.getRequestURI();
+                        log.info(url);
+
+                        chain.doFilter(request, response); // 다음 Filter 로 이동
+
+                        // 후처리
+                        log.info("비즈니스 로직 완료");
+                    }
+                }
+                ```
+
+            - **AuthFilter**
+                ```java
+                @Slf4j(topic = "AuthFilter")
+                //@Component
+                @Order(2)
+                public class AuthFilter implements Filter {
+
+                    private final UserRepository userRepository;
+                    private final JwtUtil jwtUtil;
+
+                    public AuthFilter(UserRepository userRepository, JwtUtil jwtUtil) {
+                        this.userRepository = userRepository;
+                        this.jwtUtil = jwtUtil;
+                    }
+
+                    @Override
+                    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+                        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+                        String url = httpServletRequest.getRequestURI();
+
+                        if (StringUtils.hasText(url) &&
+                                (url.startsWith("/api/user") || url.startsWith("/css") || url.startsWith("/js"))
+                        ) {
+                            // 회원가입, 로그인 관련 API 는 인증 필요없이 요청 진행
+                            chain.doFilter(request, response); // 다음 Filter 로 이동
+                        } else {
+                            // 나머지 API 요청은 인증 처리 진행
+                            // 토큰 확인
+                            String tokenValue = jwtUtil.getTokenFromRequest(httpServletRequest);
+
+                            if (StringUtils.hasText(tokenValue)) { // 토큰이 존재하면 검증 시작
+                                // JWT 토큰 substring
+                                String token = jwtUtil.substringToken(tokenValue);
+
+                                // 토큰 검증
+                                if (!jwtUtil.validateToken(token)) {
+                                    throw new IllegalArgumentException("Token Error");
+                                }
+
+                                // 토큰에서 사용자 정보 가져오기
+                                Claims info = jwtUtil.getUserInfoFromToken(token);
+
+                                User user = userRepository.findByUsername(info.getSubject()).orElseThrow(() ->
+                                        new NullPointerException("Not Found User")
+                                );
+
+                                request.setAttribute("user", user);
+                                chain.doFilter(request, response); // 다음 Filter 로 이동
+                            } else {
+                                throw new IllegalArgumentException("Not Found Token");
+                            }
+                        }
+                    }
+
+                }
+                ```
+
+    - CSRF
+        🔥 CSRF란?
+        - **CSRF(사이트 간 요청 위조, Cross-site request forgery)**
+            - 공격자가 인증된 브라우저에 저장된 쿠키의 세션 정보를 활용하여 웹 서버에 사용자가 의도하지 않은 요청을 전달하는 것입니다.
+            - CSRF 설정이 되어있는 경우 html 에서 CSRF 토큰 값을 넘겨주어야 요청을 수신 가능합니다.
+            - 쿠키 기반의 취약점을 이용한 공격 이기 때문에 REST 방식의 API 에서는 disable 가능합니다.
+            - POST 요청마다 처리해 주는 대신 **CSRF protection 을 disable** 하겠습니다.
+                - `http.csrf((csrf) -> csrf.disable());`
+
+- Spring Security의 default 로그인 기능
+    - Username: **user**
+    - Password: S*pring 로그 확인* (서버 시작 시마다 변경됨)
+
+- Spring Security 이해하기
+    ### Spring Security - Filter Chain
+    - Spring에서 모든 호출은 DispatcherServlet을 통과하게 되고 이후에 각 요청을 담당하는 Controller 로 분배됩니다.
+    - 이 때, 각 요청에 대해서 공통적으로 처리해야할 필요가 있을 때 DispatcherServlet 이전에 단계가 필요하며 이것이 Filter 입니다.
+    - Spring Security도 인증 및 인가를 처리하기 위해 Filter를 사용하는데
+        - Spring Security는 FilterChainProxy를 통해서 상세로직을 구현하고 있습니다.
+
+    ### Form Login 기반은 인증
+    - Form Login 기반 인증은 인증이 필요한 URL 요청이 들어왔을 때 인증이 되지 않았다면 로그인 페이지를 반환하는 형태입니다.
+
+    ### UsernamePasswordAuthenticationFilter
+    - UsernamePasswordAuthenticationFilter는 Spring Security의 필터인 AbstractAuthenticationProcessingFilter를 상속한 Filter입니다.
+    - 기본적으로 Form Login 기반을 사용할 때 username 과 password 확인하여 인증합니다.
+    - 인증 과정
+        1. 사용자가 username과 password를 제출하면 UsernamePasswordAuthenticationFilter는 인증된 사용자의 정보가 담기는 인증 객체인 Authentication의 종류 중 하나인  UsernamePasswordAuthenticationToken을 만들어 AuthenticationManager에게 넘겨 인증을 시도합니다.
+        2. 실패하면 SecurityContextHolder를 비웁니다.
+        3. 성공하면 SecurityContextHolder에 Authentication를 세팅합니다.
+
+    - SecurityContextHolder
+        - SecurityContext는 인증이 완료된 사용자의 상세 정보(Authentication)를 저장합니다.
+        - SecurityContext는 SecurityContextHolder 로 접근할 수 있습니다.
+
+        ```java
+        // 예시코드
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, credentials, authorities);
+        context.setAuthentication(authentication); // SecurityContext 에 인증 객체 Authentication 를 저장합니다.
+
+        SecurityContextHolder.setContext(context);
+        ```
+
+    - Authentication
+        - 현재 인증된 사용자를 나타내며 SecurityContext에서 가져올 수 있습니다.
+        - principal  :  사용자를 식별합니다.
+            - Username/Password 방식으로 인증할 때 일반적으로 UserDetails 인스턴스입니다.
+        - credentials : 주로 비밀번호, 대부분 사용자 인증에 사용한 후 비웁니다.
+        - authorities : 사용자에게 부여한 권한을 GrantedAuthority로 추상화하여 사용합니다.
+
+        ```java
+        <UserDetails>
+        @Override
+        public Collection<? extends GrantedAuthority> getAuthorities() {
+            UserRoleEnum role = user.getRole();
+            String authority = role.getAuthority();
+
+            SimpleGrantedAuthority simpleGrantedAuthority = new SimpleGrantedAuthority(authority);
+            Collection<GrantedAuthority> authorities = new ArrayList<>();
+            authorities.add(simpleGrantedAuthority);
+
+            return authorities;
+        }
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        🔥 UsernamePasswordAuthenticationToken는 Authentication을 implements한 AbstractAuthenticationToken의 하위 클래스로, 인증객체를 만드는데 사용됩니다.
+
+    - UserDetailsService
+        🔥 UserDetailsService는 username/password 인증방식을 사용할 때 사용자를 조회하고 검증한 후 UserDetails를 반환합니다. Custom하여 Bean으로 등록 후 사용 가능합니다.
+
+    - UserDetails
+        🔥 검증된 UserDetails는 UsernamePasswordAuthenticationToken 타입의 Authentication를 만들 때 사용되며 해당 인증객체는 SecurityContextHolder에 세팅됩니다. Custom하여 사용가능합니다.
+
+## 11. Spring Security : 로그인
+- 로그인 처리 과정 이해
+    - 스프링 시큐리티 사용 전
+    - 스프링 시큐리티 사용 후
+        - Client 의 요청은 모두 Spring Security 를 거치게됩니다.
+        - Spring Security 역할
+            - 인증/인가
+                1. 성공 시: Controller 로 Client 요청 전달
+                    1. Client 요청 + 사용자 정보 (UserDetails)
+                2. 실패 시: Controller 로 Client 요청 전달되지 않음
+                    1. Client 에게 Error Response 보냄
+
+    - 로그인 처리 과정
+        - 상세 처리 과정 설명
+            1. Client
+                1. 로그인 시도
+                2. 로그인 시도할 username, password 정보를 HTTP body 로 전달 (POST 요청)
+                3. 로그인 시도 URL 은 WebSecurityConfig 클래스에서 변경 가능
+                    - 아래와 같이 설정 시 "**POST /api/user/login**" 로 설정됩니다.
+
+                    ```java
+                    @Bean
+                    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                        // CSRF 설정
+                        http.csrf((csrf) -> csrf.disable());
+
+                        http.authorizeHttpRequests((authorizeHttpRequests) ->
+                                authorizeHttpRequests
+                                        .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll() // resources 접근 허용 설정
+                                        .anyRequest().authenticated() // 그 외 모든 요청 인증처리
+                        );
+
+                        // 로그인 사용
+                    	 http.formLogin((formLogin) ->
+                                formLogin
+                                     // 로그인 처리 (POST /api/user/login)
+                                    **.loginProcessingUrl("/api/user/login")**.permitAll()
+                        );
+
+                        return http.build();
+                    }
+                    ```
+
+
+            2. **인증 관리자** (Authentication Manager)
+                1. UserDetailsService 에게 username 을 전달하고 회원상세 정보를 요청
+
+            3. UserDetailsService
+                1. 회원 DB 에서 회원 조회
+
+                    ```java
+                    User user = userRepository.findByUsername(username)
+                            .orElseThrow(() -> new UsernameNotFoundException("Not Found " + username));
+                    ```
+
+                    - 회원 정보가 존재하지 않을 시 → Error 발생
+
+                2. 조회된 회원 정보(user) 를 UserDetails 로 변환
+
+                    ```java
+                    UserDetails userDetails = new UserDetailsImpl(user)
+                    ```
+
+                3. UserDetails 를 **"인증 관리자"**에게 전달
+
+            4. "인증 관리자" 가 **인증 처리**
+                1. 아래 2 개의 username, password 일치 여부 확인
+                    1. Client 가 로그인 시도한 username, password
+                    2. UserDetailsService 가 전달해준 UserDetails 의 username, password
+                2. password 비교 시
+                    1. Client 가 보낸 password 는 평문이고, UserDetails 의 password 는 암호문
+                    2. Client 가 보낸 password 를 암호화해서 비교
+                3. 인증 성공 시 → 세션에 로그인 정보 저장
+                4. 인증 실패 시 → Error 발생
+
+- 로그인 구현
+    1. 로그인 처리 URL 설정
+        - **[코드 스니펫] WebSecurityConfig**
+
+            ```java
+            package com.sparta.springauth.config;
+
+            import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
+            import org.springframework.context.annotation.Bean;
+            import org.springframework.context.annotation.Configuration;
+            import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+            import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+            import org.springframework.security.web.SecurityFilterChain;
+
+            @Configuration
+            @EnableWebSecurity // Spring Security 지원을 가능하게 함
+            public class WebSecurityConfig {
+
+                @Bean
+                public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                    // CSRF 설정
+                    http.csrf((csrf) -> csrf.disable());
+
+                    http.authorizeHttpRequests((authorizeHttpRequests) ->
+                            authorizeHttpRequests
+                                    .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll() // resources 접근 허용 설정
+                                    .requestMatchers("/api/user/**").permitAll() // '/api/user/'로 시작하는 요청 모두 접근 허가
+                                    .anyRequest().authenticated() // 그 외 모든 요청 인증처리
+                    );
+
+                    // 로그인 사용
+                    http.formLogin((formLogin) ->
+                            formLogin
+                                    // 로그인 View 제공 (GET /api/user/login-page)
+                                    .loginPage("/api/user/login-page")
+                                    // 로그인 처리 (POST /api/user/login)
+                                    .loginProcessingUrl("/api/user/login")
+                                    // 로그인 처리 후 성공 시 URL
+                                    .defaultSuccessUrl("/")
+                                    // 로그인 처리 후 실패 시 URL
+                                    .failureUrl("/api/user/login-page?error")
+                                    .permitAll()
+                    );
+
+                    return http.build();
+                }
+            }
+            ```
+
+        - 우리가 직접 Filter를 구현해서 URL 요청에 따른 인가를 설정한다면 코드가 매우 복잡해지고 유지보수 비용이 많이 들 수 있습니다.
+        - Spring Security를 사용하면 이러한 인가 처리가 굉장히 편해집니다.
+            - `requestMatchers("/api/user/**").permitAll()`
+                - 이 요청들은 로그인, 회원가입 관련 요청이기 때문에 비회원/회원 상관없이 누구나 접근이 가능해야합니다.
+                - 이렇게 인증이 필요 없는 URL들을 간편하게 허가할 수 있습니다.
+            - `anyRequest().authenticated()`
+                - 인증이 필요한 URL들도 간편하게 처리할 수 있습니다.
+    2. DB의 회원 정보 조회 →  Spring Security의 "**인증 관리자"** 에게 ****전달
+        1. UserDetailsService 구현
+            1. UserDetailsService 인터페이스 → **UserDetailsServiceImpl**
+            - **[코드 스니펫] security > UserDetailsServiceImpl**
+
+                ```java
+                package com.sparta.springauth.security;
+
+                import com.sparta.springauth.entity.User;
+                import com.sparta.springauth.repository.UserRepository;
+                import org.springframework.security.core.userdetails.UserDetails;
+                import org.springframework.security.core.userdetails.UserDetailsService;
+                import org.springframework.security.core.userdetails.UsernameNotFoundException;
+                import org.springframework.stereotype.Service;
+
+                @Service
+                public class UserDetailsServiceImpl implements UserDetailsService {
+
+                    private final UserRepository userRepository;
+
+                    public UserDetailsServiceImpl(UserRepository userRepository) {
+                        this.userRepository = userRepository;
+                    }
+
+                		@Override
+                    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+                        User user = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new UsernameNotFoundException("Not Found " + username));
+
+                        return new UserDetailsImpl(user);
+                    }
+                }
+                ```
+
+        2. UserDetails 구현
+            1. UserDetails 인터페이스 → **UserDetailsImpl**
+            - **[코드 스니펫] security > UserDetailsImpl**
+
+                ```java
+                package com.sparta.springauth.security;
+
+                import com.sparta.springauth.entity.User;
+                import com.sparta.springauth.entity.UserRoleEnum;
+                import org.springframework.security.core.GrantedAuthority;
+                import org.springframework.security.core.authority.SimpleGrantedAuthority;
+                import org.springframework.security.core.userdetails.UserDetails;
+
+                import java.util.ArrayList;
+                import java.util.Collection;
+
+                public class UserDetailsImpl implements UserDetails {
+
+                    private final User user;
+
+                    public UserDetailsImpl(User user) {
+                        this.user = user;
+                    }
+
+                    public User getUser() {
+                        return user;
+                    }
+
+                    @Override
+                    public String getPassword() {
+                        return user.getPassword();
+                    }
+
+                    @Override
+                    public String getUsername() {
+                        return user.getUsername();
+                    }
+
+                    @Override
+                    public Collection<? extends GrantedAuthority> getAuthorities() {
+                        UserRoleEnum role = user.getRole();
+                        String authority = role.getAuthority();
+
+                        SimpleGrantedAuthority simpleGrantedAuthority = new SimpleGrantedAuthority(authority);
+                        Collection<GrantedAuthority> authorities = new ArrayList<>();
+                        authorities.add(simpleGrantedAuthority);
+
+                        return authorities;
+                    }
+
+                    @Override
+                    public boolean isAccountNonExpired() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean isAccountNonLocked() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean isCredentialsNonExpired() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean isEnabled() {
+                        return true;
+                    }
+                }
+                ```
+
+    - UserDetailsService와 UserDetails를 직접 구현해서 사용하게 되면 Security의 default 로그인 기능을 사용하지 않겠다는 설정이 되어 Security의 password를 더 이상 제공하지 않는 것을 확인할 수 있습니다.
+    - POST "/api/user/login" 을 로그인 인증 URL로 설정했기 때문에 이제 해당 요청이 들어오면 우리가 직접 구현한 UserDetailsService를 통해 인증 확인 작업이 이뤄지고 인증 객체에 직접 구현한 UserDetails가 담기게 됩니다.
+
+- **@AuthenticationPrincipal**
+
+    ```java
+    @Controller
+    @RequestMapping("/api")
+    public class ProductController {
+
+        @GetMapping("/products")
+        public String getProducts(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+            // Authentication 의 Principal 에 저장된 UserDetailsImpl 을 가져옵니다.
+            User user =  userDetails.getUser();
+            System.out.println("user.getUsername() = " + user.getUsername());
+
+           return "redirect:/";
+        }
+    }
+    ```
+
+    - @AuthenticationPrincipal
+        - Authentication의 Principal 에 저장된 UserDetailsImpl을 가져올 수 있습니다.
+        - UserDetailsImpl에 저장된 인증된 사용자인 User 객체를 사용할 수 있습니다.
+    - @AuthenticationPrincipal 사용해서 메인 페이지 사용자 이름 반영하기
+
+        ```java
+        @Controller
+        public class HomeController {
+            @GetMapping("/")
+            public String home(Model model, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+                // 페이지 동적 처리 : 사용자 이름
+                model.addAttribute("username", userDetails.getUser().getUsername());
+
+                return "index";
+            }
+        }
+        ```
+
+## 12. Spring Security : JWT 로그인
+- Security Filter 순서 확인하기
+- 로그인 페이지 수정
+    - [코드 스니펫] login.html
+
+        ```html
+        <!DOCTYPE html>
+        <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport"
+                content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+          <meta http-equiv="X-UA-Compatible" content="ie=edge">
+          <link rel="preconnect" href="https://fonts.gstatic.com">
+          <link rel="stylesheet" type="text/css" href="/css/style.css">
+          <script src="https://code.jquery.com/jquery-3.7.0.min.js"
+                  integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+          <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+          <meta charset="UTF-8">
+          <title>로그인 페이지</title>
+        </head>
+        <body>
+        <div id="login-form">
+          <div id="login-title">Log into Select Shop</div>
+          <br>
+          <br>
+          <button id="login-id-btn" onclick="location.href='/api/user/signup'">
+            회원 가입하기
+          </button>
+          <div>
+            <div class="login-id-label">아이디</div>
+            <input type="text" name="username" id="username" class="login-input-box">
+
+            <div class="login-id-label">비밀번호</div>
+            <input type="password" name="password" id="password" class="login-input-box">
+
+            <button id="login-id-submit" onclick="onLogin()">로그인</button>
+          </div>
+          <div id="login-failed" style="display: none" class="alert alert-danger" role="alert">로그인에 실패하였습니다.</div>
+        </div>
+        </body>
+        <script>
+        	$(document).ready(function () {
+            // 토큰 삭제
+            Cookies.remove('Authorization', {path: '/'});
+          });
+
+          const host = 'http://' + window.location.host;
+
+          const href = location.href;
+          const queryString = href.substring(href.indexOf("?")+1)
+          if (queryString === 'error') {
+            const errorDiv = document.getElementById('login-failed');
+            errorDiv.style.display = 'block';
+          }
+
+          function onLogin() {
+            let username = $('#username').val();
+            let password = $('#password').val();
+
+            $.ajax({
+              type: "POST",
+              url: `/api/user/login`,
+              contentType: "application/json",
+              data: JSON.stringify({username: username, password: password}),
+            })
+                    .done(function (res, status, xhr) {
+                      window.location.href = host;
+                    })
+                    .fail(function (xhr, textStatus, errorThrown) {
+                      console.log('statusCode: ' + xhr.status);
+                      window.location.href = host + '/api/user/login-page?error'
+                    });
+          }
+        </script>
+        </html>
+        ```
+
+- JWT 인증 처리 (Filter)
+    - **JwtAuthenticationFilter** : 로그인 진행 및 JWT 생성
+        - [코드 스니펫] **JwtAuthenticationFilter**
+
+            ```java
+            package com.sparta.springauth.jwt;
+
+            import com.fasterxml.jackson.databind.ObjectMapper;
+            import com.sparta.springauth.dto.LoginRequestDto;
+            import com.sparta.springauth.entity.UserRoleEnum;
+            import com.sparta.springauth.security.UserDetailsImpl;
+            import jakarta.servlet.FilterChain;
+            import jakarta.servlet.ServletException;
+            import jakarta.servlet.http.HttpServletRequest;
+            import jakarta.servlet.http.HttpServletResponse;
+            import lombok.extern.slf4j.Slf4j;
+            import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+            import org.springframework.security.core.Authentication;
+            import org.springframework.security.core.AuthenticationException;
+            import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+            import java.io.IOException;
+
+            @Slf4j(topic = "로그인 및 JWT 생성")
+            public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+                private final JwtUtil jwtUtil;
+
+                public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+                    this.jwtUtil = jwtUtil;
+                    setFilterProcessesUrl("/api/user/login");
+                }
+
+                @Override
+                public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
+                    log.info("로그인 시도");
+                    try {
+                        LoginRequestDto requestDto = new ObjectMapper().readValue(request.getInputStream(), LoginRequestDto.class);
+
+                        return getAuthenticationManager().authenticate(
+                                new UsernamePasswordAuthenticationToken(
+                                        requestDto.getUsername(),
+                                        requestDto.getPassword(),
+                                        null
+                                )
+                        );
+                    } catch (IOException e) {
+                        log.error(e.getMessage());
+                        throw new RuntimeException(e.getMessage());
+                    }
+                }
+
+                @Override
+                protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+                    log.info("로그인 성공 및 JWT 생성");
+                    String username = ((UserDetailsImpl) authResult.getPrincipal()).getUsername();
+                    UserRoleEnum role = ((UserDetailsImpl) authResult.getPrincipal()).getUser().getRole();
+
+                    String token = jwtUtil.createToken(username, role);
+                    jwtUtil.addJwtToCookie(token, response);
+                }
+
+                @Override
+                protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) throws IOException, ServletException {
+                    log.info("로그인 실패");
+                    response.setStatus(401);
+                }
+            }
+            ```
+
+- JWT 인가 처리 (Filter)
+    - **JwtAuthorizationFilter** : API에 전달되는 JWT 유효성 검증 및 인가 처리
+        - [코드 스니펫] **JwtAuthorizationFilter**
+
+            ```java
+            package com.sparta.springauth.jwt;
+
+            import com.sparta.springauth.security.UserDetailsServiceImpl;
+            import io.jsonwebtoken.Claims;
+            import jakarta.servlet.FilterChain;
+            import jakarta.servlet.ServletException;
+            import jakarta.servlet.http.HttpServletRequest;
+            import jakarta.servlet.http.HttpServletResponse;
+            import lombok.extern.slf4j.Slf4j;
+            import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+            import org.springframework.security.core.Authentication;
+            import org.springframework.security.core.context.SecurityContext;
+            import org.springframework.security.core.context.SecurityContextHolder;
+            import org.springframework.security.core.userdetails.UserDetails;
+            import org.springframework.util.StringUtils;
+            import org.springframework.web.filter.OncePerRequestFilter;
+
+            import java.io.IOException;
+
+            @Slf4j(topic = "JWT 검증 및 인가")
+            public class JwtAuthorizationFilter extends OncePerRequestFilter {
+
+                private final JwtUtil jwtUtil;
+                private final UserDetailsServiceImpl userDetailsService;
+
+                public JwtAuthorizationFilter(JwtUtil jwtUtil, UserDetailsServiceImpl userDetailsService) {
+                    this.jwtUtil = jwtUtil;
+                    this.userDetailsService = userDetailsService;
+                }
+
+                @Override
+                protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain filterChain) throws ServletException, IOException {
+
+                    String tokenValue = jwtUtil.getTokenFromRequest(req);
+
+                    if (StringUtils.hasText(tokenValue)) {
+                        // JWT 토큰 substring
+                        tokenValue = jwtUtil.substringToken(tokenValue);
+                        log.info(tokenValue);
+
+                        if (!jwtUtil.validateToken(tokenValue)) {
+                            log.error("Token Error");
+                            return;
+                        }
+
+                        Claims info = jwtUtil.getUserInfoFromToken(tokenValue);
+
+                        try {
+                             setAuthentication(info.getSubject());
+                        } catch (Exception e) {
+                            log.error(e.getMessage());
+                            return;
+                        }
+                    }
+
+                    filterChain.doFilter(req, res);
+                }
+
+                // 인증 처리
+                public void setAuthentication(String username) {
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    Authentication authentication = createAuthentication(username);
+                    context.setAuthentication(authentication);
+
+                    SecurityContextHolder.setContext(context);
+                }
+
+                // 인증 객체 생성
+                private Authentication createAuthentication(String username) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                }
+            }
+            ```
+
+- **WebSecurityConfig 필터 등록**
+    - [코드 스니펫] **WebSecurityConfig**
+
+        ```java
+        package com.sparta.springauth.config;
+
+        import com.sparta.springauth.jwt.JwtAuthorizationFilter;
+        import com.sparta.springauth.jwt.JwtAuthenticationFilter;
+        import com.sparta.springauth.jwt.JwtUtil;
+        import com.sparta.springauth.security.UserDetailsServiceImpl;
+        import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        import org.springframework.security.authentication.AuthenticationManager;
+        import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+        import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+        import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+        import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+        import org.springframework.security.config.http.SessionCreationPolicy;
+        import org.springframework.security.web.SecurityFilterChain;
+        import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+        @Configuration
+        @EnableWebSecurity // Spring Security 지원을 가능하게 함
+        public class WebSecurityConfig {
+
+            private final JwtUtil jwtUtil;
+            private final UserDetailsServiceImpl userDetailsService;
+            private final AuthenticationConfiguration authenticationConfiguration;
+
+            public WebSecurityConfig(JwtUtil jwtUtil, UserDetailsServiceImpl userDetailsService, AuthenticationConfiguration authenticationConfiguration) {
+                this.jwtUtil = jwtUtil;
+                this.userDetailsService = userDetailsService;
+                this.authenticationConfiguration = authenticationConfiguration;
+            }
+
+            @Bean
+            public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+                return configuration.getAuthenticationManager();
+            }
+
+            @Bean
+            public JwtAuthenticationFilter jwtAuthenticationFilter() throws Exception {
+                JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtUtil);
+                filter.setAuthenticationManager(authenticationManager(authenticationConfiguration));
+                return filter;
+            }
+
+            @Bean
+            public JwtAuthorizationFilter jwtAuthorizationFilter() {
+                return new JwtAuthorizationFilter(jwtUtil, userDetailsService);
+            }
+
+            @Bean
+            public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                // CSRF 설정
+                http.csrf((csrf) -> csrf.disable());
+
+                // 기본 설정인 Session 방식은 사용하지 않고 JWT 방식을 사용하기 위한 설정
+                http.sessionManagement((sessionManagement) ->
+                        sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                );
+
+                http.authorizeHttpRequests((authorizeHttpRequests) ->
+                        authorizeHttpRequests
+                                .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll() // resources 접근 허용 설정
+                                .requestMatchers("/api/user/**").permitAll() // '/api/user/'로 시작하는 요청 모두 접근 허가
+                                .anyRequest().authenticated() // 그 외 모든 요청 인증처리
+                );
+
+                http.formLogin((formLogin) ->
+                        formLogin
+                                .loginPage("/api/user/login-page").permitAll()
+                );
+
+                // 필터 관리
+                http.addFilterBefore(jwtAuthorizationFilter(), JwtAuthenticationFilter.class);
+                http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+
+                return http.build();
+            }
+        }
+        ```
