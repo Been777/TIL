@@ -1,0 +1,27 @@
+# 내일배움캠프 240606 TIL
+Java 38일차
+팀프로젝트 에러 해결
+-------------------------------------------------------------------------------
+
+회원가입, 프로필, 로그인, 게시물 수정 기능과 병합 후 에러 발생
+
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2024-06-10T08:38:40.694+09:00 ERROR 17432 --- [           main] o.s.b.d.LoggingFailureAnalysisReporter   :
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+The bean 'passwordEncoder', defined in class path resource [org/example/spartaboard/config/WebSecurityConfig.class], could not be registered. A bean with that name has already been defined in class path resource [org/example/spartaboard/config/PasswordConfig.class] and overriding is disabled.
+
+Action:
+
+Consider renaming one of the beans or enabling overriding by setting spring.main.allow-bean-definition-overriding=true
+
+
+
+해당 오류는 passwordEncoder라는 이름의 빈이 두 개의 서로 다른 구성 클래스
+WebSecurityConfig와 PasswordConfig 가 있어 안쓰는 PasswordConfig 클래스를 지워주었더니 해결 !
