@@ -1,0 +1,21 @@
+# 내일배움캠프 240607 TIL
+Java 39일차
+팀프로젝트 에러 해결
+-------------------------------------------------------------------------------
+
+
+2024-06-10T08:50:30.778+09:00 ERROR 17526 --- [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : Unknown database 'spartaboard'
+2024-06-10T08:50:30.783+09:00 ERROR 17526 --- [           main] j.LocalContainerEntityManagerFactoryBean : Failed to initialize JPA EntityManagerFactory: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.exception.SQLGrammarException: Unable to open JDBC Connection for DDL execution [Unknown database 'spartaboard'] [n/a]
+2024-06-10T08:50:30.784+09:00 ERROR 17526 --- [           main] o.s.b.web.embedded.tomcat.TomcatStarter  : Error starting Tomcat context. Exception: org.springframework.beans.factory.UnsatisfiedDependencyException. Message: Error creating bean with name 'webSecurityConfig' defined in file [/Users/t2023-m0026/IdeaProjects/Sparta_Java/SpartaBoard/build/classes/java/main/org/example/spartaboard/config/WebSecurityConfig.class]: Unsatisfied dependency expressed through constructor parameter 1: Error creating bean with name 'userDetailsServiceImpl' defined in file [/Users/t2023-m0026/IdeaProjects/Sparta_Java/SpartaBoard/build/classes/java/main/org/example/spartaboard/Security/UserDetailsServiceImpl.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'userRepository' defined in org.example.spartaboard.repository.UserRepository defined in @EnableJpaRepositories declared on JpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration: Cannot resolve reference to bean 'jpaSharedEM_entityManagerFactory' while setting bean property 'entityManager'
+2024-06-10T08:50:30.817+09:00  INFO 17526 --- [           main] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2024-06-10T08:50:30.821+09:00  WARN 17526 --- [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Unable to start web server
+2024-06-10T08:50:30.829+09:00  INFO 17526 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger :
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2024-06-10T08:50:30.840+09:00 ERROR 17526 --- [           main] o.s.boot.SpringApplication               : Application run failed
+
+
+오류 메시지를 보면 Unknown database 'spartaboard'라는 에러가 발생하여 데이터베이스를 찾지 못하고 있습니다.
+이 문제를 해결하기 위해 다음 단계를 따라 데이터베이스를 생성하고 설정을 확인해야 합니다.
+
+MySQL에 접속하여 spartaboard라는 이름의 데이터베이스를 생성 후 해결 완료
