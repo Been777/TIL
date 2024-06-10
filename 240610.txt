@@ -1,0 +1,20 @@
+# 내일배움캠프 240610 TIL
+Java 40일차
+팀프로젝트 에러 해결
+-------------------------------------------------------------------------------
+
+
+각 기능 병합 후 테스트 실행 중 에러 발생 ㅠ
+
+2024-06-11T02:26:10.053+09:00 ERROR 5351 --- [           main] o.s.b.web.embedded.tomcat.TomcatStarter  : Error starting Tomcat context. Exception: org.springframework.beans.factory.UnsatisfiedDependencyException. Message: Error creating bean with name 'webSecurityConfig' defined in file [/Users/t2023-m0026/IdeaProjects/Sparta_Java/SpartaBoard/build/classes/java/main/org/example/spartaboard/config/WebSecurityConfig.class]: Unsatisfied dependency expressed through constructor parameter 1: Error creating bean with name 'userDetailsServiceImpl' defined in file [/Users/t2023-m0026/IdeaProjects/Sparta_Java/SpartaBoard/build/classes/java/main/org/example/spartaboard/Security/UserDetailsServiceImpl.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'userRepository' defined in org.example.spartaboard.repository.UserRepository defined in @EnableJpaRepositories declared on JpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration: Could not create query for public abstract boolean org.example.spartaboard.repository.UserRepository.existsUserByUserIdAndStatus(java.lang.String,org.example.spartaboard.entity.UserStatus); Reason: Failed to create query for method public abstract boolean org.example.spartaboard.repository.UserRepository.existsUserByUserIdAndStatus(java.lang.String,org.example.spartaboard.entity.UserStatus); No property 'userId' found for type 'User'; Did you mean 'userid'
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2024-06-11T02:26:10.087+09:00 ERROR 5351 --- [           main] o.s.boot.SpringApplication               : Application run failed
+
+
+에러 코드 읽어보니
+'userId' found for type 'User'; Did you mean 'userid'
+
+UserId -> Userid 로 하나씩 찾아서 바꿨는데 다 바꿨다 생각해서 돌렸지만 안바뀐게 남아 있어
+쉬프트 + 커맨드 + F 로 프로젝트 내 userId 검색 후 나와있는 것들을 다 바꿔주니 정상 작동함 !!
+해결 완료
