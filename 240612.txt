@@ -1,0 +1,778 @@
+# 내일배움캠프 240612 TIL
+Java 42일차
+RestTemplate & Open API, 오류 해결
+-------------------------------------------------------------------------------
+
+
+# RestTemplate & Open API
+## 01. RestTemplate이란 무엇일까?
+- Server To Server
+    - 지금까지는 Client 즉, 브라우저로부터 요청을 받는 서버의 입장에서 개발을 진행해왔습니다.
+    - 서비스 개발을 진행하다보면 라이브러리 사용만으로는 구현이 힘든 기능들이 무수히 많이 존재합니다.
+    - 예를 들어 우리의 서비스에서 회원가입을 진행할 때 사용자의 주소를 받아야 한다면?
+        - 주소를 검색할 수 있는 기능을 구현해야하는데 직접 구현을 하게되면 많은 시간과 비용이 들어갑니다.
+    - 이 때, 카카오에서 만든 [주소 검색 API](https://postcode.map.daum.net/guide)를 사용한다면 해당 기능을 간편하게 구현할 수 있습니다.
+    - 이럴 때 우리의 서버는 Client의 입장이 되어 Kakao 서버에 요청을 진행해야합니다.
+    - Spring에서는 서버에서 다른 서버로 간편하게 요청할 수 있도록 RestTemplate 기능을 제공하고 있습니다.
+
+- 프로젝트 생성
+    - 프로젝트 준비하기(Client 입장 서버)
+        1. IntelliJ를 실행합니다.
+        2. New Project를 클릭합니다.
+        3. 왼쪽 메뉴에서 "Spring Initializr”를 클릭하고 아래와 같이 설정합니다.
+        4.  🚒**[중요] 꼭 다음 사항을 확인해주세요.**
+            - Name: spring-resttemplate-client
+            - **Language: Java**
+            - **Build system: Gradle - Groovy**
+            - Group: com.sparta
+            - **JDK: 17**
+            - 프로젝트 경로(Location)는 자유롭게 설정하시면 됩니다.
+        5. Next를 클릭합니다.
+        6. Dependencies를 아래 사진과 같이 추가해주고 Create를 클릭합니다.
+
+    - 프로젝트 준비하기(Server 입장 서버)
+        1. IntelliJ를 실행합니다.
+        2. New Project를 클릭합니다.
+        3. 왼쪽 메뉴에서 "Spring Initializr”를 클릭하고 아래와 같이 설정합니다.
+        4.  🚒**[중요] 꼭 다음 사항을 확인해주세요.**
+            - Name: spring-resttemplate-server
+            - **Language: Java**
+            - **Build system: Gradle - Groovy**
+            - Group: com.sparta
+            - **JDK: 17**
+            - 프로젝트 경로(Location)는 자유롭게 설정하시면 됩니다.
+        5. Next를 클릭합니다.
+        6. Dependencies를 아래 사진과 같이 추가해주고 Create를 클릭합니다.
+
+- RestTemplate 사용방법
+    - 프로젝트 2개를 만들어서 Client 입장의 서버는 8080 port, Server 입장의 서버는 7070 port로 동시에 실행시키겠습니다.
+    - Client 입장 서버
+
+            ```java
+            package com.sparta.springresttemplateclient.controller;
+
+            import com.sparta.springresttemplateclient.dto.ItemDto;
+            import com.sparta.springresttemplateclient.service.RestTemplateService;
+            import org.springframework.web.bind.annotation.GetMapping;
+            import org.springframework.web.bind.annotation.RequestHeader;
+            import org.springframework.web.bind.annotation.RequestMapping;
+            import org.springframework.web.bind.annotation.RestController;
+
+            import java.util.List;
+
+            @RestController
+            @RequestMapping("/api/client")
+            public class RestTemplateController {
+
+                private final RestTemplateService restTemplateService;
+
+                public RestTemplateController(RestTemplateService restTemplateService) {
+                    this.restTemplateService = restTemplateService;
+                }
+
+                @GetMapping("/get-call-obj")
+                public ItemDto getCallObject(String query) {
+                    return restTemplateService.getCallObject(query);
+                }
+
+                @GetMapping("/get-call-list")
+                public List<ItemDto> getCallList() {
+                    return restTemplateService.getCallList();
+                }
+
+                @GetMapping("/post-call")
+                public ItemDto postCall(String query) {
+                    return restTemplateService.postCall(query);
+                }
+
+                @GetMapping("/exchange-call")
+                public List<ItemDto> exchangeCall(@RequestHeader("Authorization") String token) {
+                    return restTemplateService.exchangeCall(token);
+                }
+            }
+            ```
+
+        - [코드 스니펫] dto > ItemDto
+
+            ```java
+            package com.sparta.springresttemplateclient.dto;
+
+            import lombok.Getter;
+            import lombok.NoArgsConstructor;
+
+            @Getter
+            @NoArgsConstructor
+            public class ItemDto {
+                private String title;
+                private int price;
+            }
+            ```
+
+        - [코드 스니펫] entity > User
+
+            ```java
+            package com.sparta.springresttemplateclient.entity;
+
+            import lombok.Getter;
+
+            @Getter
+            public class User {
+                private String username;
+                private String password;
+
+                public User(String username, String password) {
+                    this.username = username;
+                    this.password = password;
+                }
+            }
+            ```
+
+        - [코드 스니펫] service > RestTemplateService
+
+            ```java
+            package com.sparta.springresttemplateclient.service;
+
+            import com.sparta.springresttemplateclient.dto.ItemDto;
+            import org.springframework.stereotype.Service;
+
+            import java.util.List;
+
+            @Slf4j
+            @Service
+            public class RestTemplateService {
+
+                public ItemDto getCallObject(String query) {
+                    return null;
+                }
+
+                public List<ItemDto> getCallList() {
+                    return null;
+                }
+
+                public ItemDto postCall(String query) {
+                    return null;
+                }
+
+                public List<ItemDto> exchangeCall(String token) {
+                    return null;
+                }
+            }
+            ```
+
+    - Server 입장 서버
+        - [코드 스니펫] controller > ItemController
+
+            ```java
+            package com.sparta.springresttemplateserver.controller;
+
+            import com.sparta.springresttemplateserver.dto.ItemResponseDto;
+            import com.sparta.springresttemplateserver.dto.UserRequestDto;
+            import com.sparta.springresttemplateserver.entity.Item;
+            import com.sparta.springresttemplateserver.service.ItemService;
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/server")
+            public class ItemController {
+
+                private final ItemService itemService;
+
+                public ItemController(ItemService itemService) {
+                    this.itemService = itemService;
+                }
+
+                @GetMapping("/get-call-obj")
+                public Item getCallObject(@RequestParam String query) {
+                    return itemService.getCallObject(query);
+                }
+
+                @GetMapping("/get-call-list")
+                public ItemResponseDto getCallList() {
+                    return itemService.getCallList();
+                }
+
+                @PostMapping("/post-call/{query}")
+                public Item postCall(@PathVariable String query, @RequestBody UserRequestDto requestDto) {
+                    return itemService.postCall(query, requestDto);
+                }
+
+                @PostMapping("/exchange-call")
+                public ItemResponseDto exchangeCall(@RequestHeader("X-Authorization") String token, @RequestBody UserRequestDto requestDto) {
+                    return itemService.exchangeCall(token, requestDto);
+                }
+            }
+            ```
+
+        - [코드 스니펫] dto > UserRequestDto
+
+            ```java
+            package com.sparta.springresttemplateserver.dto;
+
+            import lombok.Getter;
+
+            @Getter
+            public class UserRequestDto {
+                private String username;
+                private String password;
+            }
+            ```
+
+        - [코드 스니펫] dto > ItemResponseDto
+
+            ```java
+            package com.sparta.springresttemplateserver.dto;
+
+            import com.sparta.springresttemplateserver.entity.Item;
+            import lombok.Getter;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            @Getter
+            public class ItemResponseDto {
+                private final List<Item> items = new ArrayList<>();
+
+                public void setItems(Item item) {
+                    items.add(item);
+                }
+            }
+            ```
+
+        - [코드 스니펫] entity > Item
+
+            ```java
+            package com.sparta.springresttemplateserver.entity;
+
+            import lombok.Getter;
+
+            @Getter
+            public class Item {
+                private String title;
+                private int price;
+
+                public Item(String title, int price) {
+                    this.title = title;
+                    this.price = price;
+                }
+            }
+            ```
+
+        - [코드 스니펫] service > ItemService
+
+            ```java
+            package com.sparta.springresttemplateserver.service;
+
+            import com.sparta.springresttemplateserver.dto.ItemResponseDto;
+            import com.sparta.springresttemplateserver.dto.UserRequestDto;
+            import com.sparta.springresttemplateserver.entity.Item;
+            import org.springframework.stereotype.Service;
+
+            import java.util.Arrays;
+            import java.util.List;
+
+            @Service
+            public class ItemService {
+
+                private final List<Item> itemList = Arrays.asList(
+                        new Item("Mac", 3_888_000),
+                        new Item("iPad", 1_230_000),
+                        new Item("iPhone", 1_550_000),
+                        new Item("Watch", 450_000),
+                        new Item("AirPods", 350_000)
+                );
+
+                public Item getCallObject(String query) {
+                    return null;
+                }
+
+                public ItemResponseDto getCallList() {
+                    return null;
+                }
+
+                public Item postCall(String query, UserRequestDto requestDto) {
+                    return null;
+                }
+
+                public ItemResponseDto exchangeCall(String token, UserRequestDto requestDto) {
+                    return null;
+                }
+            }
+            ```
+
+## 02. RestTemplate의 Get 요청
+- Get 요청 방법
+    - Client 입장 서버
+        1. RestTemplate을 주입 받습니다.
+
+            ```java
+            private final RestTemplate restTemplate;
+
+            // RestTemplateBuilder의 build()를 사용하여 RestTemplate을 생성합니다.
+            public RestTemplateService(RestTemplateBuilder builder) {
+                this.restTemplate = builder.build();
+            }
+            ```
+
+        2. 요청 받은 검색어를 Query String  방식으로 Server 입장의 서버로  RestTemplate를 사용하여 요청합니다.
+
+            ```java
+            public ItemDto getCallObject(String query) {
+                // 요청 URL 만들기
+                URI uri = UriComponentsBuilder
+                        .fromUriString("http://localhost:7070")
+                        .path("/api/server/get-call-obj")
+                        .queryParam("query", query)
+                        .encode()
+                        .build()
+                        .toUri();
+                log.info("uri = " + uri);
+
+                ResponseEntity<ItemDto> responseEntity = restTemplate.getForEntity(uri, ItemDto.class);
+
+                log.info("statusCode = " + responseEntity.getStatusCode());
+
+                return responseEntity.getBody();
+            }
+            ```
+
+            - [코드 스니펫] RestTemplateService - getCallObject
+
+                ```java
+                public ItemDto getCallObject(String query) {
+                    // 요청 URL 만들기
+                    URI uri = UriComponentsBuilder
+                            .fromUriString("http://localhost:7070")
+                            .path("/api/server/get-call-obj")
+                            .queryParam("query", query)
+                            .encode()
+                            .build()
+                            .toUri();
+                    log.info("uri = " + uri);
+
+                    ResponseEntity<ItemDto> responseEntity = restTemplate.getForEntity(uri, ItemDto.class);
+
+                    log.info("statusCode = " + responseEntity.getStatusCode());
+
+                    return responseEntity.getBody();
+                }
+                ```
+
+            - Spring의 UriComponentsBuilder를 사용해서 URI를 손쉽게 만들 수 있습니다.
+            - RestTemplate의 getForEntity는 Get 방식으로 해당 URI의 서버에 요청을 진행합니다.
+                - 첫 번째 파라미터에는 URI, 두 번째 파라미터에는 전달 받은 데이터와 매핑하여 인스턴스화할 클래스의 타입을 주면됩니다.
+            - 요청의 결과값에 대해서 직접 JSON TO Object를 구현할 필요없이 RestTemplate을 사용하면 자동으로 처리 해줍니다.
+                - 따라서 `response.getBody()` 를 사용하여 두 번째 파라미터로 전달한 클래스 타입으로 자동 변환된 객체를 가져올 수 있습니다.
+    - Server 입장 서버
+        1. Server 입장의 서버에서 itemList를 조회하여 요청받은 검색어에 맞는 Item을 반환합니다.
+
+            ```java
+            public Item getCallObject(String query) {
+                for (Item item : itemList) {
+                    if(item.getTitle().equals(query)) {
+                        return item;
+                    }
+                }
+                return null;
+            }
+            ```
+
+            - [코드 스니펫] ItemService - getCallObject
+
+                ```java
+                public Item getCallObject(String query) {
+                    for (Item item : itemList) {
+                        if(item.getTitle().equals(query)) {
+                            return item;
+                        }
+                    }
+                    return null;
+                }
+                ```
+
+- 요청한 Item이 여러 개라면?
+    - Client 입장 서버
+        - [코드 스니펫] build.gradle : json
+
+            ```groovy
+            // json
+            implementation 'org.json:json:20230227'
+            ```
+
+        1. Item List 조회
+
+            ```java
+            public List<ItemDto> getCallList() {
+                // 요청 URL 만들기
+                URI uri = UriComponentsBuilder
+                        .fromUriString("http://localhost:7070")
+                        .path("/api/server/get-call-list")
+                        .encode()
+                        .build()
+                        .toUri();
+                log.info("uri = " + uri);
+
+                ResponseEntity<String> responseEntity = restTemplate.getForEntity(uri, String.class);
+
+                log.info("statusCode = " + responseEntity.getStatusCode());
+                log.info("Body = " + responseEntity.getBody());
+
+                return fromJSONtoItems(responseEntity.getBody());
+            }
+            ```
+
+            - [코드 스니펫] RestTemplateService - getCallList
+
+                ```java
+                public List<ItemDto> getCallList() {
+                    // 요청 URL 만들기
+                    URI uri = UriComponentsBuilder
+                            .fromUriString("http://localhost:7070")
+                            .path("/api/server/get-call-list")
+                            .encode()
+                            .build()
+                            .toUri();
+                    log.info("uri = " + uri);
+
+                    ResponseEntity<String> responseEntity = restTemplate.getForEntity(uri, String.class);
+
+                    log.info("statusCode = " + responseEntity.getStatusCode());
+                    log.info("Body = " + responseEntity.getBody());
+
+                    return fromJSONtoItems(responseEntity.getBody());
+                }
+                ```
+
+            - 결과 값이 다중 JSON으로 넘어오기 때문에 JSON To Object를 사용하지 않고 일단 String 값 그대로를 가져옵니다.
+                - Server 입장 서버의 ItemResponseDto는 아래의 JSON 형태로 변환되어 전달됩니다.
+
+                    ```json
+                    {
+                    "items":[
+                    		{"title":"Mac","price":3888000},
+                    		{"title":"iPad","price":1230000},
+                    		{"title":"iPhone","price":1550000},
+                    		{"title":"Watch","price":450000},
+                    		{"title":"AirPods","price":350000}
+                    	]
+                    }
+                    ```
+
+                - JSON 처리를 도와주는 라이브러리를 추가하여 받아온 JSON 형태의 String을 처리합니다.
+
+                    ```java
+                    public List<ItemDto> fromJSONtoItems(String responseEntity) {
+                        JSONObject jsonObject = new JSONObject(responseEntity);
+                        JSONArray items  = jsonObject.getJSONArray("items");
+                        List<ItemDto> itemDtoList = new ArrayList<>();
+
+                        for (Object item : items) {
+                            ItemDto itemDto = new ItemDto((JSONObject) item);
+                            itemDtoList.add(itemDto);
+                        }
+
+                        return itemDtoList;
+                    }
+                    ```
+
+                    - [코드 스니펫] RestTemplateService - fromJSONtoItems
+
+                        ```java
+                        public List<ItemDto> fromJSONtoItems(String responseEntity) {
+                            JSONObject jsonObject = new JSONObject(responseEntity);
+                            JSONArray items  = jsonObject.getJSONArray("items");
+                            List<ItemDto> itemDtoList = new ArrayList<>();
+
+                            for (Object item : items) {
+                                ItemDto itemDto = new ItemDto((JSONObject) item);
+                                itemDtoList.add(itemDto);
+                            }
+
+                            return itemDtoList;
+                        }
+                        ```
+
+                    - JSONObject, JSONArray 이해하기
+                        1. **문자열 정보를 JSONObject로 바꾸기**
+
+                            ```java
+                            JSONObject jsonObject = new JSONObject(responseEntity);
+                            ```
+
+                        2. **JSONObject에서 items 배열 꺼내기**
+
+                            ```java
+                            JSONArray items  = jsonObject.getJSONArray("items");
+                            ```
+
+                        3. **JSONArray로 for문 돌면서 상품 하나씩 ItemDto로 변환하기**
+
+                            ```java
+                            List<ItemDto> itemDtoList = new ArrayList<>();
+
+                            for (Object item : items) {
+                                ItemDto itemDto = new ItemDto((JSONObject) item);
+                                itemDtoList.add(itemDto);
+                            }
+                            ```
+
+                        4. **JSONObject에서 ItemDto로 변환하기**
+
+                            ```java
+                            this.title = itemJson.getString("title");
+                            this.price = itemJson.getInt("price");
+                            ```
+
+        - ItemDto에 받아온 JSONObject를 사용하여 초기화하는 생성자를 추가 해줍니다.
+
+            ```java
+            @Getter
+            @NoArgsConstructor
+            public class ItemDto {
+                private String title;
+                private int price;
+
+                public ItemDto(JSONObject itemJson) {
+                    this.title = itemJson.getString("title");
+                    this.price = itemJson.getInt("price");
+                }
+            }
+            ```
+
+            - [코드 스니펫] ItemDto
+
+                ```java
+                package com.sparta.springresttemplateclient.dto;
+
+                import lombok.Getter;
+                import lombok.NoArgsConstructor;
+                import org.json.JSONObject;
+
+                @Getter
+                @NoArgsConstructor
+                public class ItemDto {
+                    private String title;
+                    private int price;
+
+                    public ItemDto(JSONObject itemJson) {
+                        this.title = itemJson.getString("title");
+                        this.price = itemJson.getInt("price");
+                    }
+                }
+                ```
+
+    - Server 입장의 서버
+        1. Server 입장의 서버에서 itemList를 ItemResponseDto에 담아 반환합니다.
+
+            ```java
+            public ItemResponseDto getCallList() {
+                ItemResponseDto responseDto = new ItemResponseDto();
+                for (Item item : itemList) {
+                    responseDto.setItems(item);
+                }
+                return responseDto;
+            }
+            ```
+
+            - [코드 스니펫] ItemService - getCallList
+
+                ```java
+                public ItemResponseDto getCallList() {
+                    ItemResponseDto responseDto = new ItemResponseDto();
+                    for (Item item : itemList) {
+                        responseDto.setItems(item);
+                    }
+                    return responseDto;
+                }
+                ```
+
+## 03. RestTemplate의 Post 요청
+
+- Post 요청 방법
+    - Client 입장 서버
+        1. 요청 받은 검색어를 Query String  방식으로 Server 입장의 서버로  RestTemplate를 사용하여 요청합니다.
+
+            ```java
+            public ItemDto postCall(String query) {
+                // 요청 URL 만들기
+                URI uri = UriComponentsBuilder
+                        .fromUriString("http://localhost:7070")
+                        .path("/api/server/post-call/{query}")
+                        .encode()
+                        .build()
+                        .expand(query)
+                        .toUri();
+                log.info("uri = " + uri);
+
+                User user = new User("Robbie", "1234");
+
+                ResponseEntity<ItemDto> responseEntity = restTemplate.postForEntity(uri, user, ItemDto.class);
+
+                log.info("statusCode = " + responseEntity.getStatusCode());
+
+                return responseEntity.getBody();
+            }
+            ```
+
+            - [코드 스니펫] RestTemplateService - postCall
+
+                ```java
+                public ItemDto postCall(String query) {
+                    // 요청 URL 만들기
+                    URI uri = UriComponentsBuilder
+                            .fromUriString("http://localhost:7070")
+                            .path("/api/server/post-call/{query}")
+                            .encode()
+                            .build()
+                            .expand(query)
+                            .toUri();
+                    log.info("uri = " + uri);
+
+                    User user = new User("Robbie", "1234");
+
+                    ResponseEntity<ItemDto> responseEntity = restTemplate.postForEntity(uri, user, ItemDto.class);
+
+                    log.info("statusCode = " + responseEntity.getStatusCode());
+
+                    return responseEntity.getBody();
+                }
+                ```
+
+            - UriComponentsBuilder의 expand를 사용하여 {query} 안의 값을 동적으로 처리할 수 있습니다.
+            - RestTemplate의 postForEntity는  Post 방식으로 해당 URI의 서버에 요청을 진행합니다.
+                - 첫 번째 파라미터에는 URI, 두 번째 파라미터에는 HTTP Body에 넣어줄 데이터를 넣습니다.
+                    - Java 객체를 두 번째 파라미터에 넣으면 자동으로 JSON 형태로 변환됩니다.
+                - 세 번째 파라미터에는 전달 받은 데이터와 매핑하여 인스턴스화할 클래스의 타입을 주면됩니다.
+    - Server 입장 서버
+        1. Server 입장의 서버에서 itemList를 조회하여 요청받은 검색어에 맞는 Item을 반환합니다.
+
+            ```java
+            public Item postCall(String query, UserRequestDto userRequestDto) {
+                System.out.println("userRequestDto.getUsername() = " + userRequestDto.getUsername());
+                System.out.println("userRequestDto.getPassword() = " + userRequestDto.getPassword());
+
+                return getCallObject(query);
+            }
+            ```
+
+            - [코드 스니펫] ItemService - postCall
+
+                ```java
+                public Item postCall(String query, UserRequestDto userRequestDto) {
+                    System.out.println("userRequestDto.getUsername() = " + userRequestDto.getUsername());
+                    System.out.println("userRequestDto.getPassword() = " + userRequestDto.getPassword());
+
+                    return getCallObject(query);
+                }
+                ```
+
+            - 전달 받은 HTTP Body의  User 데이터를 확인합니다.
+
+## 04. RestTemplate의 exchange
+
+- 요청 Header에 정보를 추가하고 싶다면?
+    - RestTemplate으로 요청을 보낼 때 Header에 특정 정보를 같이 전달 하고 싶다면 어떻게 하면 될까요?
+    - Client 입장 서버
+        1. RestTemplate의 exchange를 사용합니다.
+
+            ```java
+            public List<ItemDto> exchangeCall(String token) {
+                // 요청 URL 만들기
+                URI uri = UriComponentsBuilder
+                        .fromUriString("http://localhost:7070")
+                        .path("/api/server/exchange-call")
+                        .encode()
+                        .build()
+                        .toUri();
+                log.info("uri = " + uri);
+
+                User user = new User("Robbie", "1234");
+
+                RequestEntity<User> requestEntity = RequestEntity
+                        .post(uri)
+                        .header("X-Authorization", token)
+                        .body(user);
+
+                ResponseEntity<String> responseEntity = restTemplate.exchange(requestEntity, String.class);
+
+                return fromJSONtoItems(responseEntity.getBody());
+            }
+            ```
+
+            - [코드 스니펫] RestTemplateService - exchangeCall
+
+                ```java
+                public List<ItemDto> exchangeCall(String token) {
+                    // 요청 URL 만들기
+                    URI uri = UriComponentsBuilder
+                            .fromUriString("http://localhost:7070")
+                            .path("/api/server/exchange-call")
+                            .encode()
+                            .build()
+                            .toUri();
+                    log.info("uri = " + uri);
+
+                    User user = new User("Robbie", "1234");
+
+                    RequestEntity<User> requestEntity = RequestEntity
+                            .post(uri)
+                            .header("X-Authorization", token)
+                            .body(user);
+
+                    ResponseEntity<String> responseEntity = restTemplate.exchange(requestEntity, String.class);
+
+                    return fromJSONtoItems(responseEntity.getBody());
+                }
+                ```
+
+            - exchange 메서드의 첫 번째 파라미터에 RequestEntity 객체를 만들어 전달해주면 uri, header, body의 정보를 한번에 전달할 수 있습니다.
+    - Server 입장 서버
+        1. 전달된 header와 body의 정보를 확인할 수 있습니다.
+
+            ```java
+            public ItemResponseDto exchangeCall(String token, UserRequestDto requestDto) {
+                System.out.println("token = " + token);
+                System.out.println("requestDto.getUsername() = " + requestDto.getUsername());
+                System.out.println("requestDto.getPassword() = " + requestDto.getPassword());
+
+                return getCallList();
+            }
+            ```
+
+            - [코드 스니펫] ItemService - exchangeCall
+
+                ```java
+                public ItemResponseDto exchangeCall(String token, UserRequestDto requestDto) {
+                    System.out.println("token = " + token);
+                    System.out.println("requestDto.getUsername() = " + requestDto.getUsername());
+                    System.out.println("requestDto.getPassword() = " + requestDto.getPassword());
+
+                    return getCallList();
+                }
+                ```
+
+
+
+------------------------------------------------------------------------
+오류 해결
+
+@GetMapping("/user-folder")
+    public String getUserInfo(Model model, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+
+        model.addAttribute("folders", folderService.getFolders(userDetails.getUser()));
+
+        return "index :: #fragment";
+    }
+
+
+addAttribute < 오류 발생
+'Model'의 메서드 'addAttribute'을(를) 해결할 수 없습니다
+
+강의 내용 따라서 똑같이 작성하였는데 안된다.. 코드 스니펫 복사하여도 똑같음
+튜터님께 달려가니
+import 가 잘못된거 같다! 라고 하심
+해당 import
+import ch.qos.logback.core.model.Model;
+
+지우고 새로 import
+import org.springframework.ui.Model;
+해결완료 !!
