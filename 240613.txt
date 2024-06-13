@@ -1,0 +1,757 @@
+# 내일배움캠프 240613 TIL
+Java 43일차
+JPA
+-------------------------------------------------------------------------------
+
+# JPA 한 걸음 더 나아가기
+
+## 06. Entity 연관 관계
+
+- 프로젝트 생성
+    - 프로젝트 준비하기
+        1. IntelliJ를 실행합니다.
+        2. New Project를 클릭합니다.
+        3. 왼쪽 메뉴에서 "Spring Initializr”를 클릭하고 아래와 같이 설정합니다.
+        4.  🚒**[중요] 꼭 다음 사항을 확인해주세요.**
+            - Name: jpa-advance
+            - **Language: Java**
+            - **Build system: Gradle - Groovy**
+            - Group: com.sparta
+            - **JDK: 17**
+            - 프로젝트 경로(Location)는 자유롭게 설정하시면 됩니다.
+        5. Next를 클릭합니다.
+        6. Dependencies를 아래 사진과 같이 추가해주고 Create를 클릭합니다.
+    - 프로젝트 설정추가
+        - src > main > resources > application.properties
+            - [코드 스니펫] application.properties
+
+                ```xml
+                spring.datasource.url=jdbc:mysql://localhost:3306/orderapp
+                spring.datasource.username=root
+                spring.datasource.password={비밀번호}
+                spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+                spring.jpa.hibernate.ddl-auto=update
+
+                spring.jpa.properties.hibernate.show_sql=true
+                spring.jpa.properties.hibernate.format_sql=true
+                spring.jpa.properties.hibernate.use_sql_comments=true
+                ```
+
+        - Intellij Database 연동
+            - CREATE DATABASE
+
+                ```sql
+                CREATE DATABASE orderapp;
+                ```
+
+            - 연동 순서
+                1. Database 탭을 클릭하시고 + 버튼을 누릅니다.
+                2. Data Source > MySQL 를 클릭합니다.
+                3. User, Password, Database 정보를 추가한 후 Ok를 클릭합니다.
+                4. MySQL Database에 연결이 완료되었습니다.
+
+- 주문 APP DB table 설계
+    - 고객 (users) 테이블
+
+        | id | name |
+        | --- | --- |
+        | 1 | Robbie |
+        | 2 | Robbert |
+        - [코드 스니펫] create users table
+
+            ```sql
+            create table users
+            (
+                id   bigint not null auto_increment,
+                name varchar(255),
+                primary key (id)
+            );
+            ```
+
+    - 음식 (food) 테이블
+
+        | id | name | price |
+        | --- | --- | --- |
+        | 1 | 후라이드 치킨 | 15000 |
+        | 2 | 양념 치킨 | 20000 |
+        | 3 | 고구마 피자 | 30000 |
+        | 4 | 아보카도 피자 | 50000 |
+        - [코드 스니펫] create food table
+
+            ```sql
+            create table food
+            (
+                id    bigint not null auto_increment,
+                name  varchar(255),
+                price float(53) not null,
+                primary key (id)
+            );
+            ```
+
+- DB table간의 연관 관계
+    - 연관 관계 고민
+        - 고객이 음식을 주문 시, 주문 정보는 어느 테이블에 들어가야 할까요?
+            - 고객 테이블? 음식 테이블?
+        1. 고객 테이블
+            - 한명의 고객은 음식을 여러개를 주문할 수 있습니다.
+                - 고객과 음식은 1 대 N 관계입니다.
+            - 주문한 음식의 정보를 파악하기 위해 food_id 컬럼을 추가합니다.
+                - [코드 스니펫] food_id 컬럼 추가
+
+                    ```sql
+                    ALTER TABLE users ADD food_id bigint;
+                    ```
+
+            - 고객 테이블에 주문 정보를 넣습니다.
+                - [코드 스니펫] insert users table
+
+                    ```sql
+                    INSERT INTO users (name, food_id) VALUES ('Robbie', 1);
+                    INSERT INTO users (name, food_id) VALUES ('Robbert', 1);
+                    INSERT INTO users (name, food_id) VALUES ('Robbie', 2);
+                    ```
+
+            | id | name | food_id |
+            | --- | --- | --- |
+            | 1 | Robbie | 1 |
+            | 2 | Robbert | 1 |
+            | 3 | Robbie | 2 |
+            - Robbie는 후라이드 치킨, 양념 치킨을 주문했습니다.
+                - 불필요하게 고객의 이름이 중복되는 문제가 발생합니다.
+
+        2. 음식 테이블
+            - 하나의 음식은 여러명의 고객에게 주문될 수 있습니다.
+                - 음식과 고객은 1 대 N 관계입니다.
+            - 주문한 고객의 정보를 파악하기 위해 user_id 컬럼을 추가합니다.
+                - [코드 스니펫] user_id 컬럼 추가
+
+                    ```sql
+                    ALTER TABLE food ADD user_id bigint;
+                    ```
+
+            - 음식 테이블에 주문 정보를 넣습니다.
+                - [코드 스니펫] insert food table
+
+                    ```sql
+                    INSERT INTO food (name, price, user_id) VALUES ('후라이드 치킨', 15000, 1);
+                    INSERT INTO food (name, price, user_id) VALUES ('후라이드 치킨', 15000, 2);
+                    INSERT INTO food (name, price, user_id) VALUES ('양념 치킨', 20000, 1);
+                    ```
+
+            | id | name | price | user_id |
+            | --- | --- | --- | --- |
+            | 1 | 후라이드 치킨 | 15000 | 1 |
+            | 2 | 후라이드 치킨 | 15000 | 2 |
+            | 3 | 양념 치킨 | 20000 | 1 |
+            - 후라이드 치킨을 여러사람이 주문하게되었을 때!
+            - 불필요하게 음식의 이름이 중복되는 문제가 발생합니다.
+
+            | ID | name | price | user_id |
+            | --- | --- | --- | --- |
+            | 1 | 후라이드치킨 | 15000 | 1,2 |
+            - 그렇다면 위 표처럼 ‘데이터베이스에 저장될 때 user_id 컬럼에 1,2 로 저장하면 되지 않을까?’라고 생각할 수도 있지만!
+            - user_id 값을 계속해서 추가할 때 뿐만 아니라 고객의 정보도 함께 조회가 필요할 때 많은 문제가 발생할 수 있기 때문에 현실적으로 불가능합니다.
+
+        3. 주문 테이블
+            - 주문에 대한 정보를 기록할 orders 테이블을 추가합니다.
+                - [코드 스니펫] create orders table
+
+                    ```sql
+                    create table orders
+                    (
+                        id         bigint not null auto_increment,
+                        user_id    bigint,
+                        food_id    bigint,
+                        order_date date,
+                        primary key (id)
+                    );
+                    ```
+
+            - 주문 테이블을 사용하여 테이블들의 연관 관계를 해결합니다.
+                - [코드 스니펫] 주문 테이블 적용
+
+                    ```sql
+                    drop table if exists food;
+                    drop table if exists users;
+                    create table users
+                    (
+                        id   bigint not null auto_increment,
+                        name varchar(255),
+                        primary key (id)
+                    );
+
+                    create table food
+                    (
+                        id    bigint    not null auto_increment,
+                        name  varchar(255),
+                        price float(53) not null,
+                        primary key (id)
+                    );
+
+                    alter table orders
+                        add constraint orders_user_fk
+                            foreign key (user_id)
+                                references users (id);
+
+                    alter table orders
+                        add constraint orders_food_fk
+                            foreign key (food_id)
+                                references food (id);
+
+                    INSERT INTO users (name) VALUES ('Robbie');
+                    INSERT INTO users (name) VALUES ('Robbert');
+
+                    INSERT INTO food (name, price) VALUES ('후라이드 치킨', 15000);
+                    INSERT INTO food (name, price) VALUES ('양념 치킨', 20000);
+                    INSERT INTO food (name, price) VALUES ('고구마 피자', 30000);
+                    INSERT INTO food (name, price) VALUES ('아보카도 피자', 50000);
+
+                    INSERT INTO orders (user_id, food_id, order_date) VALUES (1, 1, SYSDATE());
+                    INSERT INTO orders (user_id, food_id, order_date) VALUES (2, 1, SYSDATE());
+                    INSERT INTO orders (user_id, food_id, order_date) VALUES (2, 2, SYSDATE());
+                    INSERT INTO orders (user_id, food_id, order_date) VALUES (1, 4, SYSDATE());
+                    INSERT INTO orders (user_id, food_id, order_date) VALUES (2, 3, SYSDATE());
+                    ```
+
+            - 고객
+                | id | name |
+                | --- | --- |
+                | 1 | Robbie |
+                | 2 | Robbert |
+            - 음식
+
+                | id | name | price |
+                | --- | --- | --- |
+                | 1 | 후라이드 치킨 | 15000 |
+                | 2 | 양념 치킨 | 20000 |
+                | 3 | 고구마 피자 | 30000 |
+                | 4 | 아보카도 피자 | 50000 |
+            - 주문
+
+                | id | user_id | food_id | 주문일 |
+                | --- | --- | --- | --- |
+                | 1 | 1 | 1 | 2023-01-01 |
+                | 2 | 2 | 1 | 2023-01-01 |
+                | 3 | 2 | 2 | 2023-01-01 |
+                | 4 | 1 | 4 | 2023-01-01 |
+                | 5 | 2 | 3 | 2023-01-01 |
+            - 고객 1명은 음식 N개를 주문할 수 있습니다.
+                - 고객 : 음식 = 1 : N 관계
+            - 음식 1개는 고객 N명에게 주문될 수 있습니다.
+                - 음식 : 고객 = 1 : N 관계
+            - 결론적으로 고객과 음식은 N : M 관계입니다.
+                - 고객 : 음식 = N : M 관계
+            - 이렇듯 N : M 관계인 테이블들의 연관 관계를 해결하기 위해 orders 테이블처럼 중간 테이블을 사용할 수 있습니다.
+                - 고객 1명은 주문을 여러번 할 수 있습니다.
+                    - 고객 : 주문 = 1 : N
+                - 음식 1개는 주문이 여러번 될 수 있습니다.
+                    - 음식 : 주문 = 1 : N
+
+- DB table간의 방향
+    - DB 테이블들간의 관계에서 방향의 개념이 존재할까요?
+        - 방향에는 크게 단방향과 양방향을 생각해 볼 수 있습니다.
+            - 예를 들어 단방향은 users 테이블에서만 food 테이블을 참조할 수 있을 때를 의미합니다.
+            - 양방향은 users 테이블과 food 테이블이 서로를 참조할 수 있을 때를 의미합니다.
+            - 그렇다면 DB 테이블간의 방향이 있는 게 맞을까요?
+
+    - 고객 ‘Robbie’가 주문한 음식 정보를 users 테이블 기준으로 조회해보겠습니다.
+
+        ```sql
+        SELECT u.name as username, f.name as foodname, o.order_date as orderdate
+        FROM users u
+                 INNER JOIN orders o on u.id = o.user_id
+                 INNER JOIN food f on o.food_id = f.id
+        WHERE o.user_id = 1;
+        ```
+
+        - [코드 스니펫] ‘Robbie’가 주문한 음식 정보를 users 테이블 기준으로 조회
+
+            ```sql
+            SELECT u.name as username, f.name as foodname, o.order_date as orderdate
+            FROM users u
+                     INNER JOIN orders o on u.id = o.user_id
+                     INNER JOIN food f on o.food_id = f.id
+            WHERE o.user_id = 1;
+            ```
+
+    - 그렇다면 food 테이블 기준으로는 ‘Robbie’가 주문한 음식 정보를 조회할 수 없는 걸까요?
+
+        ```sql
+        SELECT u.name as username, f.name as foodname, o.order_date as orderdate
+        FROM food f
+                 INNER JOIN orders o on f.id = o.food_id
+                 INNER JOIN users u on o.user_id = u.id
+        WHERE o.user_id = 1;
+        ```
+
+        - [코드 스니펫] ‘Robbie’가 주문한 음식 정보를 food 테이블 기준으로 조회
+
+            ```sql
+            SELECT u.name as username, f.name as foodname, o.order_date as orderdate
+            FROM food f
+                     INNER JOIN orders o on f.id = o.food_id
+                     INNER JOIN users u on o.user_id = u.id
+            WHERE o.user_id = 1;
+            ```
+
+    - DB에서는 어떤 테이블을 기준으로 하든 원하는 정보를 JOIN을 사용하여 조회할 수 있습니다.
+        - 이처럼 DB 테이블간의 관계에서는 방향의 개념이 없습니다.
+
+- Entity간의 연관 관계
+    - 그렇다면 JPA Entity에서는 이러한 테이블간의 연관 관계를 어떻게 표현하고 있을까요?
+    - 음식 : 고객 = N : 1 관계를 표현해보겠습니다.
+        - 음식
+
+            ```java
+            @Entity
+            @Table(name = "food")
+            public class Food {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+                private String name;
+                private double price;
+
+                @ManyToOne
+                @JoinColumn(name = "user_id")
+                private User user;
+            }
+            ```
+
+        - 고객
+
+            ```java
+            @Entity
+            @Table(name = "users")
+            public class User {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+                private String name;
+
+                @OneToMany(mappedBy = "user")
+                private List<Food> foodList = new ArrayList<>();
+            }
+            ```
+
+        - 한명의 고객은 여러번 주문이 가능한 상황입니다.
+            - 이를 Entity에서 여러번 가능함을 표현하기 위해 Java 컬렉션을 사용하여 `List<Food> foodList = new ArrayList<>()` 이처럼 표현할 수 있습니다.
+        - 그렇다면 Entity에서 이렇게까지 해서 표현을 하는 이유가 무엇일까요?
+            - DB 테이블에서는 고객 테이블 기준으로 음식의 정보를 조회하려고 할 때 JOIN을 사용하여 바로 조회가 가능하지만 고객 Entity 입장에서는 음식 Entity의 정보를 가지고 있지 않으면 음식의 정보를 조회할 방법이 없습니다.
+            - 따라서 DB 테이블에 실제 컬럼으로 존재하지는 않지만 Entity 상태에서 다른 Entity를 참조하기 위해 이러한 방법을 사용합니다.
+        - 현재 음식 Entity와 고객 Entity는 서로를 참조하고 있습니다.
+            - 이러한 관계를 양방향 관계라 부릅니다.
+        - 그럼 반대로 단방향 관계는 어떻게 표현 되는지 보겠습니다.
+            - 음식
+
+                ```java
+                @Entity
+                @Table(name = "food")
+                public class Food {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                    private double price;
+
+                    @ManyToOne
+                    @JoinColumn(name = "user_id")
+                    private User user;
+                }
+                ```
+
+            - 고객
+
+                ```java
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                }
+                ```
+
+            - 음식 Entity에서만 고객 Entity를 참조할 수 있습니다.
+                - 이러한 관계를 단방향 관계라 부릅니다.
+                - 고객 Entity에는 음식 Entity의 정보가 없기 때문에 음식 정보를 조회할 수 없습니다.
+    - <정리>
+        - DB 테이블에서는 테이블 사이의 연관관계를 FK(외래 키)로 맺을 수 있고 방향 상관없이 조회가 가능합니다.
+        - Entity에서는 상대 Entity를 참조하여 Entity 사이의 연관관계를 맺을 수 있습니다.
+        - 하지만 상대 Entity를 참조하지 않고 있다면 상대 Entity를 조회할 수 있는 방법이 없습니다.
+        - 따라서 Entity에서는 DB 테이블에는 없는 방향의 개념이 존재합니다.
+
+## 07. 1 대 1 관계
+- `@OneToOne`
+    - `@OneToOne` 애너테이션은 1 대 1 관계를 맺어주는 역할을 합니다.
+    - 고객 Entity와 음식 Entity가 1 대 1 관계라 가정하여 관계를 맺어보겠습니다.
+
+- 단방향 관계
+    - 외래 키의 주인 정하기
+        - Entity에서 외래 키의 주인은 일반적으로 N(다)의 관계인 Entity 이지만 1 대 1 관계에서는 외래 키의 주인을 직접 지정해야합니다.
+            > **외래 키 주인**만이 **외래 키** 를 **등록, 수정, 삭제**할 수 있으며, **주인이 아닌 쪽**은 오직 **외래 키**를 **읽기만 가능**합니다.
+            >
+        - @JoinColumn()은 외래 키의 주인이 활용하는 애너테이션입니다.
+            - 컬럼명, null 여부, unique 여부 등을 지정할 수 있습니다.
+        - 음식 Entity가 외래 키의 주인인 경우!
+            - 음식
+
+                ```java
+                @Entity
+                @Table(name = "food")
+                public class Food {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                    private double price;
+
+                    @OneToOne
+                    @JoinColumn(name = "user_id")
+                    private User user;
+                }
+                ```
+
+            - 고객
+
+                ```java
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                }
+                ```
+
+        - 고객 Entity가 외래 키의 주인인 경우!
+            - 음식
+
+                ```java
+                @Entity
+                @Table(name = "food")
+                public class Food {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                    private double price;
+                }
+                ```
+
+            - 고객
+
+                ```java
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+
+                    @OneToOne
+                    @JoinColumn(name = "food_id")
+                    private Food food;
+                }
+                ```
+
+- 양방향 관계
+    - 양방향 설정
+        - 양방향 관계에서 외래 키의 주인을 지정해 줄 때 mappedBy 옵션을 사용합니다.
+            - mappedBy의 속성값은 외래 키의 주인인 상대 Entity의 필드명을 의미합니다.
+        - 관계 설정 방법에 대해 정리 해보겠습니다.
+            - 단방향이라면 외래 키의 주인만 상대 Entity 타입의 필드를 가지면서 @JoinColumn()을 활용하여 외래 키의 속성을 설정해주면됩니다.
+            - 양방향이라면 외래 키의 주인은 상대 Entity 타입의 필드를 가지면서 @JoinColumn()을 활용하여 외래 키의 속성을 설정을 해줍니다.
+                - 그리고 상대 Entity는 외래 키의 주인 Entity 타입의 필드를 가지면서 mappedBy 옵션을 사용하여 속성 값으로 외래 키의 주인 Entity에 선언된 @JoinColumn()으로 설정되고 있는 필드명을 넣어주면 됩니다.
+            ⚠️ 주의!
+            1.  외래 키의 주인 Entity에서 @JoinColumn() 애너테이션을 사용하지 않아도 default 옵션이 적용되기 때문에 생략이 가능합니다.
+                - 다만 1 대 N 관계에서 외래 키의 주인 Entity가 @JoinColumn() 애너테이션을 생략한다면 JPA가 외래 키를 저장할 컬럼을 파악할 수가 없어서 의도하지 않은 중간 테이블이 생성됩니다.
+                - 따라서 외래 키의 주인 Entity에서 @JoinColumn() 애너테이션을 활용하시는게 좋습니다.
+            2.  양방향 관계에서 mappedBy 옵션을 생략할 경우 JPA가 외래 키의 주인 Entity를 파악할 수가 없어 의도하지 않은 중간 테이블이 생성되기 때문에 반드시 설정해주시는게 좋습니다.
+
+        - 음식 Entity가 외래 키의 주인인 경우!
+            - 음식
+
+                ```java
+                @Entity
+                @Table(name = "food")
+                public class Food {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                    private double price;
+
+                    @OneToOne
+                    @JoinColumn(name = "user_id")
+                    private User user;
+                }
+                ```
+
+            - 고객
+
+                ```java
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+
+                    @OneToOne(mappedBy = "user")
+                    private Food food;
+                }
+                ```
+
+        - 고객 Entity가 외래 키의 주인인 경우!
+            - 음식
+
+                ```java
+                @Entity
+                @Table(name = "food")
+                public class Food {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+                    private double price;
+
+                    @OneToOne(mappedBy = "food")
+                    private User user;
+                }
+                ```
+
+            - 고객
+
+                ```java
+                @Entity
+                @Table(name = "users")
+                public class User {
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    private Long id;
+                    private String name;
+
+                    @OneToOne
+                    @JoinColumn(name = "food_id")
+                    private Food food;
+                }
+                ```
+
+- 연습하기
+    - 외래 키의 주인이 음식 Entity인 경우를 연습해보겠습니다.
+        - [코드 스니펫] OneToOneTest
+
+            ```java
+            package com.sparta.jpaadvance.relation;
+
+            import com.sparta.jpaadvance.repository.FoodRepository;
+            import com.sparta.jpaadvance.repository.UserRepository;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.boot.test.context.SpringBootTest;
+            import org.springframework.transaction.annotation.Transactional;
+
+            @Transactional
+            @SpringBootTest
+            public class OneToOneTest {
+
+                @Autowired
+                UserRepository userRepository;
+                @Autowired
+                FoodRepository foodRepository;
+
+            }
+            ```
+
+    - 단방향
+        - [코드 스니펫] Food Entity
+
+            ```java
+            package com.sparta.jpaadvance.entity;
+
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import lombok.Setter;
+
+            @Entity
+            @Getter
+            @Setter
+            @Table(name = "food")
+            public class Food {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+                private String name;
+                private double price;
+
+                @OneToOne
+                @JoinColumn(name = "user_id")
+                private User user;
+            }
+            ```
+
+        - [코드 스니펫] User Entity
+
+            ```java
+            package com.sparta.jpaadvance.entity;
+
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import lombok.Setter;
+
+            @Entity
+            @Getter
+            @Setter
+            @Table(name = "users")
+            public class User {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+                private String name;
+            }
+            ```
+
+    - 단방향 테스트
+        - [코드 스니펫] OneToOne 단방향 테스트
+
+            ```java
+            @Test
+            @Rollback(value = false) // 테스트에서는 @Transactional 에 의해 자동 rollback 됨으로 false 설정해준다.
+            @DisplayName("1대1 단방향 테스트")
+            void test1() {
+
+                User user = new User();
+                user.setName("Robbie");
+
+                // 외래 키의 주인인 Food Entity user 필드에 user 객체를 추가해 줍니다.
+                Food food = new Food();
+                food.setName("후라이드 치킨");
+                food.setPrice(15000);
+                food.setUser(user); // 외래 키(연관 관계) 설정
+
+                userRepository.save(user);
+                foodRepository.save(food);
+            }
+            ```
+
+    - 양방향
+        - [코드 스니펫] 양방향 User Entity
+
+            ```java
+            package com.sparta.jpaadvance.entity;
+
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import lombok.Setter;
+
+            @Entity
+            @Getter
+            @Setter
+            @Table(name = "users")
+            public class User {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+                private String name;
+
+                @OneToOne(mappedBy = "user")
+                private Food food;
+
+                public void addFood(Food food) {
+                    this.food = food;
+                    food.setUser(this);
+                }
+            }
+            ```
+
+    - 양방향 테스트
+        - [코드 스니펫] OneToOne 양방향 테스트
+
+            ```java
+            @Test
+            @Rollback(value = false)
+            @DisplayName("1대1 양방향 테스트 : 외래 키 저장 실패")
+            void test2() {
+                Food food = new Food();
+                food.setName("고구마 피자");
+                food.setPrice(30000);
+
+                // 외래 키의 주인이 아닌 User 에서 Food 를 저장해보겠습니다.
+                User user = new User();
+                user.setName("Robbie");
+                user.setFood(food);
+
+                userRepository.save(user);
+                foodRepository.save(food);
+
+                // 확인해 보시면 user_id 값이 들어가 있지 않은 것을 확인하실 수 있습니다.
+            }
+
+            @Test
+            @Rollback(value = false)
+            @DisplayName("1대1 양방향 테스트 : 외래 키 저장 실패 -> 성공")
+            void test3() {
+                Food food = new Food();
+                food.setName("고구마 피자");
+                food.setPrice(30000);
+
+                // 외래 키의 주인이 아닌 User 에서 Food 를 저장하기 위해 addFood() 메서드 추가
+                // 외래 키(연관 관계) 설정 food.setUser(this); 추가
+                User user = new User();
+                user.setName("Robbie");
+                user.addFood(food);
+
+                userRepository.save(user);
+                foodRepository.save(food);
+            }
+
+            @Test
+            @Rollback(value = false)
+            @DisplayName("1대1 양방향 테스트")
+            void test4() {
+                User user = new User();
+                user.setName("Robbert");
+
+                Food food = new Food();
+                food.setName("고구마 피자");
+                food.setPrice(30000);
+                food.setUser(user); // 외래 키(연관 관계) 설정
+
+                userRepository.save(user);
+                foodRepository.save(food);
+            }
+            ```
+
+    - 조회
+        - [코드 스니펫] OneToOne 조회 테스트
+
+            ```java
+            @Test
+            @DisplayName("1대1 조회 : Food 기준 user 정보 조회")
+            void test5() {
+                Food food = foodRepository.findById(1L).orElseThrow(NullPointerException::new);
+                // 음식 정보 조회
+                System.out.println("food.getName() = " + food.getName());
+
+                // 음식을 주문한 고객 정보 조회
+                System.out.println("food.getUser().getName() = " + food.getUser().getName());
+            }
+
+            @Test
+            @DisplayName("1대1 조회 : User 기준 food 정보 조회")
+            void test6() {
+                User user = userRepository.findById(1L).orElseThrow(NullPointerException::new);
+                // 고객 정보 조회
+                System.out.println("user.getName() = " + user.getName());
+
+                // 해당 고객이 주문한 음식 정보 조회
+                Food food = user.getFood();
+                System.out.println("food.getName() = " + food.getName());
+                System.out.println("food.getPrice() = " + food.getPrice());
+            }
+            ```
