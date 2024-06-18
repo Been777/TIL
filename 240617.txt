@@ -1,0 +1,722 @@
+# 내일배움캠프 240617 TIL
+Java 45일차
+JPA(11~13)
+-------------------------------------------------------------------------------
+
+
+## 11. 지연 로딩
+- 지연 로딩과 즉시 로딩
+    - 음식 테이블과 고객 테이블이 N : 1 양방향 관계라 가정해보겠습니다.
+        - [코드 스니펫] FetchTypeTest
+            
+            ```java
+            package com.sparta.jpaadvance.fetch;
+            
+            import com.sparta.jpaadvance.entity.Food;
+            import com.sparta.jpaadvance.entity.User;
+            import com.sparta.jpaadvance.repository.FoodRepository;
+            import com.sparta.jpaadvance.repository.UserRepository;
+            import org.junit.jupiter.api.Test;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.boot.test.context.SpringBootTest;
+            import org.springframework.test.annotation.Rollback;
+            import org.springframework.transaction.annotation.Transactional;
+            
+            import java.util.ArrayList;
+            import java.util.List;
+            
+            @SpringBootTest
+            public class FetchTypeTest {
+            
+                @Autowired
+                UserRepository userRepository;
+                @Autowired
+                FoodRepository foodRepository;
+            
+                @Test
+                @Transactional
+                @Rollback(value = false)
+                void init() {
+                    List<User> userList = new ArrayList<>();
+                    User user1 = new User();
+                    user1.setName("Robbie");
+                    userList.add(user1);
+            
+                    User user2 = new User();
+                    user2.setName("Robbert");
+                    userList.add(user2);
+                    userRepository.saveAll(userList);
+            
+                    List<Food> foodList = new ArrayList<>();
+                    Food food1 = new Food();
+                    food1.setName("고구마 피자");
+                    food1.setPrice(30000);
+                    food1.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food1);
+            
+                    Food food2 = new Food();
+                    food2.setName("아보카도 피자");
+                    food2.setPrice(50000);
+                    food2.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food2);
+            
+                    Food food3 = new Food();
+                    food3.setName("후라이드 치킨");
+                    food3.setPrice(15000);
+                    food3.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food3);
+            
+                    Food food4 = new Food();
+                    food4.setName("후라이드 치킨");
+                    food4.setPrice(15000);
+                    food4.setUser(user2); // 외래 키(연관 관계) 설정
+                    foodList.add(food4);
+            
+                    Food food5 = new Food();
+                    food5.setName("고구마 피자");
+                    food5.setPrice(30000);
+                    food5.setUser(user2); // 외래 키(연관 관계) 설정
+                    foodList.add(food5);
+                    foodRepository.saveAll(foodList);
+                }
+            
+            }
+            ```      
+    
+    ```java
+    @Test
+    @DisplayName("아보카도 피자 조회")
+    void test1() {
+        Food food = foodRepository.findById(2L).orElseThrow(NullPointerException::new);
+    
+        System.out.println("food.getName() = " + food.getName());
+        System.out.println("food.getPrice() = " + food.getPrice());
+    
+        System.out.println("아보카도 피자를 주문한 회원 정보 조회");
+        System.out.println("food.getUser().getName() = " + food.getUser().getName());
+    }
+    ```
+    
+    - [코드 스니펫] 아보카도 피자 조회
+        
+        ```java
+        @Test
+        @DisplayName("아보카도 피자 조회")
+        void test1() {
+            Food food = foodRepository.findById(2L).orElseThrow(NullPointerException::new);
+        
+            System.out.println("food.getName() = " + food.getName());
+            System.out.println("food.getPrice() = " + food.getPrice());
+        
+            System.out.println("아보카도 피자를 주문한 회원 정보 조회");
+            System.out.println("food.getUser().getName() = " + food.getUser().getName());
+        }
+        ```
+    - “아보카도 피자”의 가격을 조회하려고 했을 뿐인데 자동으로 JOIN 문을 사용하여 연관관계가 설정되어있는 고객 테이블의 정보도 가져오고 있습니다. 
+    - JPA는 연관관계가 설정된 Entity의 정보를 바로 가져올지, 필요할 때 가져올지 정할 수 있습니다.
+        - 즉, 가져오는 방법을 정하게되는데 JPA에서는 Fetch Type이라 부릅니다.
+        - Fetch Type의 종류에는 2가지가 있는데 하나는 `*LAZY*`, 다른 하나는 `*EAGER` 입니다.*
+        - `LAZY`는 `지연 로딩`으로 필요한 시점에 정보를 가져옵니다.
+        - `*EAGER`는 `즉시 로딩`으로 이름의 뜻처럼 조회할 때 연관된 모든 Entity의 정보를 즉시 가져옵니다.*
+    - 기본적으로 @OneToMany 애너테이션은 Fetch Type의 default 값이 `LAZY`로 지정되어있고 반대로 @ManyToOne 애너테이션은 `*EAGER`로 되어있습니다.*
+    - 다른 연관관계 애너테이션들도 default 값이 있는데 이를 구분하는 방법이 있습니다.
+        - 애너테이션 이름에서 뒤쪽에 Many가 붙어있으면 설정된 해당 필드가 Java 컬렉션 타입일 것입니다.
+            - 즉, 해당 Entity의 정보가 여러 개 들어있을 수 있다는 것을 의미합니다.
+            - 따라서 효율적으로 정보를 조회하기 위해 `지연 로딩`이 default로 설정되어있습니다.
+        - 반대로 이름 뒤쪽이 One일 경우 해당 Entity 정보가 한 개만 들어오기 때문에 즉시 정보를 가져와도 무리가 없어 `즉시 로딩`이 default로 설정되어있습니다.
+    
+    ```java
+    @Test
+    @Transactional
+    @DisplayName("Robbie 고객 조회")
+    void test2() {
+        User user = userRepository.findByName("Robbie");
+        System.out.println("user.getName() = " + user.getName());
+    
+        System.out.println("Robbie가 주문한 음식 이름 조회");
+        for (Food food : user.getFoodList()) {
+            System.out.println(food.getName());
+        }
+    }
+    ```
+    
+    - [코드 스니펫] Robbie 고객 조회
+        
+        ```java
+        @Test
+        @Transactional
+        @DisplayName("Robbie 고객 조회")
+        void test2() {
+            User user = userRepository.findByName("Robbie");
+            System.out.println("user.getName() = " + user.getName());
+        
+            System.out.println("Robbie가 주문한 음식 이름 조회");
+            for (Food food : user.getFoodList()) {
+                System.out.println(food.getName());
+            }
+        }
+        ```
+
+    - 이번에는 Robbie 고객을 조회한 후 Robbie 고객이 주문한 음식들의 이름을 조회했습니다.
+    - @OneToMany 즉, default가 `지연 로딩`으로 설정되어있기 때문에 우선 고객을 조회한 후
+    - `user.getFoodList()` 호출 즉, 주문한 음식의 정보가 필요한 시점에 음식 테이블에 해당 고객 Entity의 식별자 값을 사용하여 Select SQL이 수행되었습니다.
+           
+- 영속성 컨텍스트와 지연 로딩
+    - JPA 기초 강의에서 영속성 컨텍스트의 기능 기억나시나요?
+        - 1차 캐시
+        - 쓰기 지연 저장소
+        - 변경 감지
+    - 지연 로딩도 마찬가지로 영속성 컨텍스트의 기능 중 하나입니다.
+        - 따라서 지연 로딩된 Entity의 정보를 조회하려고 할 때는 반드시 영속성 컨텍스트가 존재해야합니다.
+        - ‘영속성 컨텍스트가 존재해야한다’라는 의미는 결국 ‘트랜잭션이 적용되어있어야 한다’라는 의미와 동일합니다.
+        
+        ```java
+        @Test
+        @DisplayName("Robbie 고객 조회 실패")
+        void test3() {
+            User user = userRepository.findByName("Robbie");
+            System.out.println("user.getName() = " + user.getName());
+        
+            System.out.println("Robbie가 주문한 음식 이름 조회");
+            for (Food food : user.getFoodList()) {
+                System.out.println(food.getName());
+            }
+        }
+        ```
+        
+        - [코드 스니펫] Robbie 고객 조회 실패
+            
+            ```java
+            @Test
+            @DisplayName("Robbie 고객 조회 실패")
+            void test3() {
+                User user = userRepository.findByName("Robbie");
+                System.out.println("user.getName() = " + user.getName());
+            
+                System.out.println("Robbie가 주문한 음식 이름 조회");
+                for (Food food : user.getFoodList()) {
+                    System.out.println(food.getName());
+                }
+            }
+            ```
+            
+        - ‘Robbie 고객 조회 실패’ 테스트 코드를 확인해보시면 @Transactional이 test3() 메서드에 설정되어있지 않습니다.
+        - 즉, 트랜잭션이 적용되지 않았기 때문에 `지연 로딩`된 음식 Entity 정보들을 `user.getFoodList()` 즉, 필요한 시점에 조회하려고 하자 오류가 발생했습니다.
+        - 따라서 `지연 로딩`된 정보를 조회하려고 할 때는 반드시 트랜잭션이 적용되어 영속성 컨텍스트가 존재하는지를 확인해야합니다.
+        
+
+## 12. 영속성 전이
+- CASCADE : PERSIST
+    - 음식 테이블과 고객 테이블이 N : 1 양방향 관계라 가정해보겠습니다.
+        - [코드 스니펫] CascadeTest
+            
+            ```java
+            package com.sparta.jpaadvance.cascade;
+            
+            import com.sparta.jpaadvance.repository.FoodRepository;
+            import com.sparta.jpaadvance.repository.UserRepository;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.boot.test.context.SpringBootTest;
+            
+            @SpringBootTest
+            public class CascadeTest {
+            
+                @Autowired
+                UserRepository userRepository;
+                @Autowired
+                FoodRepository foodRepository;
+            
+            }
+            ```
+            
+    - 고객 ‘Robbie’가 후라이드 치킨과 양념 치킨을 주문해보겠습니다.
+    
+    ```java
+    @Test
+    @DisplayName("Robbie 음식 주문")
+    void test1() {
+        // 고객 Robbie 가 후라이드 치킨과 양념 치킨을 주문합니다.
+        User user = new User();
+        user.setName("Robbie");
+    
+        // 후라이드 치킨 주문
+        Food food = new Food();
+        food.setName("후라이드 치킨");
+        food.setPrice(15000);
+    
+        user.addFoodList(food);
+    
+        Food food2 = new Food();
+        food2.setName("양념 치킨");
+        food2.setPrice(20000);
+    
+        user.addFoodList(food2);
+    
+        userRepository.save(user);
+        foodRepository.save(food);
+        foodRepository.save(food2);
+    }
+    ```
+    
+    - [코드 스니펫] Robbie 음식 주문
+        
+        ```java
+        @Test
+        @DisplayName("Robbie 음식 주문")
+        void test1() {
+            // 고객 Robbie 가 후라이드 치킨과 양념 치킨을 주문합니다.
+            User user = new User();
+            user.setName("Robbie");
+        
+            // 후라이드 치킨 주문
+            Food food = new Food();
+            food.setName("후라이드 치킨");
+            food.setPrice(15000);
+        
+            user.addFoodList(food);
+        
+            Food food2 = new Food();
+            food2.setName("양념 치킨");
+            food2.setPrice(20000);
+        
+            user.addFoodList(food2);
+        
+            userRepository.save(user);
+            foodRepository.save(food);
+            foodRepository.save(food2);
+        }
+        ```
+        
+    
+    ```java
+    @Entity
+    @Getter
+    @Setter
+    @Table(name = "users")
+    public class User {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+        private String name;
+    
+        @OneToMany(mappedBy = "user")
+        private List<Food> foodList = new ArrayList<>();
+    
+    		public void addFoodList(Food food) {
+    			  this.foodList.add(food);
+    			  food.setUser(this);// 외래 키(연관 관계) 설정
+    		}
+    }
+    ```
+    
+    - 외래 키(연관 관계) 설정을 위해 addFoodList 메서드를 고객 Entity에 추가하겠습니다.
+    
+    ```java
+    userRepository.save(user);
+    foodRepository.save(food);
+    foodRepository.save(food2);
+    ```
+    
+    - Robbie가 음식을 주문하기 위해서는 위 처럼 user, food, food2 모두 직접 save() 메서드를 호출하면서 영속화해야합니다.
+    - JPA에서는 이를 간편하게 처리할 수 있는 방법으로 영속성 전이(CASCADE)의 PERSIST 옵션을 제공합니다.
+        - 영속성 전이란?
+            - 영속 상태의 Entity에서 수행되는 작업들이 연관된 Entity까지 전파되는 상황을 뜻합니다.
+        - 영속성 전이를 적용하여 해당 Entity를 저장할 때 연관된 Entity까지 자동으로 저장하기 위해서는 자동으로 저장하려고 하는 연관된 Entity에 추가한 연관관계 애너테이션에 CASCADE의 PERSIST 옵션을 설정하면됩니다.
+        
+    
+    ```java
+    @Entity
+    @Getter
+    @Setter
+    @Table(name = "users")
+    public class User {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+        private String name;
+    
+        @OneToMany(mappedBy = "user", cascade = CascadeType.PERSIST)
+        private List<Food> foodList = new ArrayList<>();
+    
+    		public void addFoodList(Food food) {
+    			  this.foodList.add(food);
+    			  food.setUser(this);// 외래 키(연관 관계) 설정
+    		}
+    }
+    ```
+    
+    - 고객 Entity의 @OneToMany 애너테이션에 영속성 전이를 적용해서 음식 Entity도 자동으로 저장될 수 있도록 만듭니다.
+    
+    ```java
+    @Test
+    @DisplayName("영속성 전이 저장")
+    void test2() {
+        // 고객 Robbie 가 후라이드 치킨과 양념 치킨을 주문합니다.
+        User user = new User();
+        user.setName("Robbie");
+    
+        // 후라이드 치킨 주문
+        Food food = new Food();
+        food.setName("후라이드 치킨");
+        food.setPrice(15000);
+    
+        user.addFoodList(food);
+    
+        Food food2 = new Food();
+        food2.setName("양념 치킨");
+        food2.setPrice(20000);
+    
+        user.addFoodList(food2);
+    
+        userRepository.save(user);
+    }
+    ```
+    
+    - [코드 스니펫] 영속성 전이 저장
+        
+        ```java
+        @Test
+        @DisplayName("영속성 전이 저장")
+        void test2() {
+            // 고객 Robbie 가 후라이드 치킨과 양념 치킨을 주문합니다.
+            User user = new User();
+            user.setName("Robbie");
+        
+            // 후라이드 치킨 주문
+            Food food = new Food();
+            food.setName("후라이드 치킨");
+            food.setPrice(15000);
+        
+            user.addFoodList(food);
+        
+            Food food2 = new Food();
+            food2.setName("양념 치킨");
+            food2.setPrice(20000);
+        
+            user.addFoodList(food2);
+        
+            userRepository.save(user);
+        }
+        ```
+        
+    - CASCADE 설정을 적용했기 때문에 직접 음식 Entity 객체 food, food2를 영속 상태로 만들지 않아도 자동으로 잘 저장 되었습니다.
+        
+- CASCADE : REMOVE
+    - 이번에는 연관된 Entity를 손쉽게 삭제하는 방법에 대해서 학습하겠습니다.
+    - Robbie가 주문 APP을 탈퇴하려고 합니다.
+        - 주문한 음식 정보들을 모두 삭제하려고 하는데 어떻게 하면 될까요?
+    
+    ```java
+    @Entity
+    @Getter
+    @Setter
+    @Table(name = "users")
+    public class User {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+        private String name;
+    
+        @OneToMany(mappedBy = "user")
+        private List<Food> foodList = new ArrayList<>();
+    
+        public void addFoodList(Food food) {
+            this.foodList.add(food);
+            food.setUser(this);// 외래 키(연관 관계) 설정
+        }
+    }
+    ```
+    
+    - `cascade = CascadeType.*PERSIST` 제거*
+    
+    ```java
+    @Test
+    @Transactional
+    @Rollback(value = false)
+    @DisplayName("Robbie 탈퇴")
+    void test3() {
+        // 고객 Robbie 를 조회합니다.
+        User user = userRepository.findByName("Robbie");
+        System.out.println("user.getName() = " + user.getName());
+    
+        // Robbie 가 주문한 음식 조회
+        for (Food food : user.getFoodList()) {
+            System.out.println("food.getName() = " + food.getName());
+        }
+    
+        // 주문한 음식 데이터 삭제
+        foodRepository.deleteAll(user.getFoodList());
+    
+        // Robbie 탈퇴
+        userRepository.delete(user);
+    }
+    ```
+    
+    - [코드 스니펫] Robbie 탈퇴
+        
+        ```java
+        @Test
+        @Transactional
+        @Rollback(value = false)
+        @DisplayName("Robbie 탈퇴")
+        void test3() {
+            // 고객 Robbie 를 조회합니다.
+            User user = userRepository.findByName("Robbie");
+            System.out.println("user.getName() = " + user.getName());
+        
+            // Robbie 가 주문한 음식 조회
+            for (Food food : user.getFoodList()) {
+                System.out.println("food.getName() = " + food.getName());
+            }
+        
+            // 주문한 음식 데이터 삭제
+            foodRepository.deleteAll(user.getFoodList());
+        
+            // Robbie 탈퇴
+            userRepository.delete(user);
+        }
+        ```
+        
+    - 주문한 음식 데이터를 삭제하기 위해서 `지연 로딩`된 음식 Entity들을 가져와 직접 삭제해줍니다.
+    - 그 후 Robbie 고객의 Entity를 삭제합니다.
+    
+    - JPA에서는 이를 간편하게 처리할 수 있는 방법으로 영속성 전이(CASCADE)의 REMOVE 옵션을 제공합니다.
+    
+    ```java
+    @Entity
+    @Getter
+    @Setter
+    @Table(name = "users")
+    public class User {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+        private String name;
+    
+        @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
+        private List<Food> foodList = new ArrayList<>();
+    
+        public void addFoodList(Food food) {
+            this.foodList.add(food);
+            food.setUser(this);// 외래 키(연관 관계) 설정
+        }
+    }
+    ```
+    
+    - `cascade = {CascadeType.*PERSIST*, CascadeType.*REMOVE*}` 이렇게 중복으로 옵션을 설정할 수도 있습니다.
+    - 고객 Entity의 @OneToMany 애너테이션에 연관된 음식 Entity도 자동으로 삭제될 수 있도록 REMOVE 옵션을 추가합니다.
+    
+    ```java
+    @Test
+    @Transactional
+    @Rollback(value = false)
+    @DisplayName("영속성 전이 삭제")
+    void test4() {
+        // 고객 Robbie 를 조회합니다.
+        User user = userRepository.findByName("Robbie");
+        System.out.println("user.getName() = " + user.getName());
+    
+        // Robbie 가 주문한 음식 조회
+        for (Food food : user.getFoodList()) {
+            System.out.println("food.getName() = " + food.getName());
+        }
+    
+        // Robbie 탈퇴
+        userRepository.delete(user);
+    }
+    ```
+    
+    - [코드 스니펫] 영속성 전이 삭제
+        
+        ```java
+        @Test
+        @Transactional
+        @Rollback(value = false)
+        @DisplayName("영속성 전이 삭제")
+        void test4() {
+            // 고객 Robbie 를 조회합니다.
+            User user = userRepository.findByName("Robbie");
+            System.out.println("user.getName() = " + user.getName());
+        
+            // Robbie 가 주문한 음식 조회
+            for (Food food : user.getFoodList()) {
+                System.out.println("food.getName() = " + food.getName());
+            }
+        
+            // Robbie 탈퇴
+            userRepository.delete(user);
+        }
+        ```
+        
+    - Robbie 고객 Entity 객체를 조회한 후 해당 객체를 delete 하자 자동으로 연관된 음식 데이터들이 삭제되었습니다.
+
+## 13. 고아 Entity 삭제
+- orphanRemoval
+    - CASCADE의 REMOVE 옵션을 적용하면 해당 Entity 객체를 삭제 했을 때 연관된 Entity 객체들을 자동으로 삭제할 수 있었습니다.
+        - 하지만 REMOVE 옵션 같은 경우 연관된 Entity와 관계를 제거했다고 해서 자동으로 해당 Entity가 삭제 되지는 않습니다.
+        - [코드 스니펫] OrphanTest
+            
+            ```java
+            package com.sparta.jpaadvance.orphan;
+            
+            import com.sparta.jpaadvance.entity.Food;
+            import com.sparta.jpaadvance.entity.User;
+            import com.sparta.jpaadvance.repository.FoodRepository;
+            import com.sparta.jpaadvance.repository.UserRepository;
+            import org.junit.jupiter.api.Test;
+            import org.springframework.beans.factory.annotation.Autowired;
+            import org.springframework.boot.test.context.SpringBootTest;
+            import org.springframework.test.annotation.Rollback;
+            import org.springframework.transaction.annotation.Transactional;
+            
+            import java.util.ArrayList;
+            import java.util.List;
+            
+            @SpringBootTest
+            public class OrphanTest {
+            
+                @Autowired
+                UserRepository userRepository;
+                @Autowired
+                FoodRepository foodRepository;
+            
+                @Test
+                @Transactional
+                @Rollback(value = false)
+                void init() {
+                    List<User> userList = new ArrayList<>();
+                    User user1 = new User();
+                    user1.setName("Robbie");
+                    userList.add(user1);
+            
+                    User user2 = new User();
+                    user2.setName("Robbert");
+                    userList.add(user2);
+                    userRepository.saveAll(userList);
+            
+                    List<Food> foodList = new ArrayList<>();
+                    Food food1 = new Food();
+                    food1.setName("고구마 피자");
+                    food1.setPrice(30000);
+                    food1.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food1);
+            
+                    Food food2 = new Food();
+                    food2.setName("아보카도 피자");
+                    food2.setPrice(50000);
+                    food2.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food2);
+            
+                    Food food3 = new Food();
+                    food3.setName("후라이드 치킨");
+                    food3.setPrice(15000);
+                    food3.setUser(user1); // 외래 키(연관 관계) 설정
+                    foodList.add(food3);
+            
+                    Food food4 = new Food();
+                    food4.setName("양념 치킨");
+                    food4.setPrice(20000);
+                    food4.setUser(user2); // 외래 키(연관 관계) 설정
+                    foodList.add(food4);
+            
+                    Food food5 = new Food();
+                    food5.setName("고구마 피자");
+                    food5.setPrice(30000);
+                    food5.setUser(user2); // 외래 키(연관 관계) 설정
+                    foodList.add(food5);
+                    foodRepository.saveAll(foodList);
+                }
+            
+            }
+            ```
+    
+    ```java
+    @Test
+    @Transactional
+    @Rollback(value = false)
+    @DisplayName("연관관계 제거")
+    void test1() {
+        // 고객 Robbie 를 조회합니다.
+        User user = userRepository.findByName("Robbie");
+        System.out.println("user.getName() = " + user.getName());
+    
+        // 연관된 음식 Entity 제거 : 후라이드 치킨
+        Food chicken = null;
+        for (Food food : user.getFoodList()) {
+            if(food.getName().equals("후라이드 치킨")) {
+                chicken = food;
+            }
+        }
+        if(chicken != null) {
+            user.getFoodList().remove(chicken);
+        }
+    
+        // 연관관계 제거 확인
+        for (Food food : user.getFoodList()) {
+            System.out.println("food.getName() = " + food.getName());
+        }
+    }
+    ```
+    
+    - [코드 스니펫] 연관관계 제거
+        
+        ```java
+        @Test
+        @Transactional
+        @Rollback(value = false)
+        @DisplayName("연관관계 제거")
+        void test1() {
+            // 고객 Robbie 를 조회합니다.
+            User user = userRepository.findByName("Robbie");
+            System.out.println("user.getName() = " + user.getName());
+        
+            // 연관된 음식 Entity 제거 : 후라이드 치킨
+            Food chicken = null;
+            for (Food food : user.getFoodList()) {
+                if(food.getName().equals("후라이드 치킨")) {
+                    chicken = food;
+                }
+            }
+            if(chicken != null) {
+                user.getFoodList().remove(chicken);
+            }
+        
+            // 연관관계 제거 확인
+            for (Food food : user.getFoodList()) {
+                System.out.println("food.getName() = " + food.getName());
+            }
+        }
+        ```
+        
+    - 후라이드 치킨 Entity 객체와 연관관계를 제거했지만 Delete SQL이 수행되지 않는 것을 확인할 수 있습니다.
+    - JPA에서는 이를 간편하게 처리할 수 있는 방법으로 orphanRemoval 옵션을 제공합니다.
+    
+    ```java
+    @Entity
+    @Getter
+    @Setter
+    @Table(name = "users")
+    public class User {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+        private String name;
+    
+        @OneToMany(mappedBy = "user", cascade = CascadeType.PERSIST, orphanRemoval = true)
+        private List<Food> foodList = new ArrayList<>();
+    
+        public void addFoodList(Food food) {
+            this.foodList.add(food);
+            food.setUser(this);// 외래 키(연관 관계) 설정
+        }
+    }
+    ```
+    
+    - orphanRemoval 옵션을 설정해준 후 다시한번 확인해 보겠습니다.
+    - Delete SQL이 수행되어 후라이드 치킨 데이터가 삭제된 것을 확인할 수 있습니다.
+    - 추가로 orphanRemoval 옵션도 REMOVE 옵션과 마찬가지로 해당 Entity 즉, Robbie Entity 객체를 삭제하면 연관된 음식 Entity들이 자동으로 삭제됩니다.
+    ⚠️ 주의!
+    - orphanRemoval이나 REMOVE 옵션을 사용할 때 삭제하려고 하는 연관된 Entity를 다른 곳에서 참조하고 있는지 아닌지를 꼭 확인해야합니다.
+        - A와 B에 참조되고 있던 C를 B를 삭제하면서 같이 삭제하게 되면 A는 참조하고 있던 C가 사라졌기 때문에 문제가 발생할 수 있습니다.
+        - 따라서 orphanRemoval 같은 경우 @ManyToOne 같은 애너테이션에서는 사용할 수 없습니다.
+            - ManyToOne이 설정된 Entity는 해당 Entity 객체를 참조하는 다른 Entity 객체들이 있을 수 있기 때문에 속성으로 orphanRemoval를 가지고 있지 않습니다.
