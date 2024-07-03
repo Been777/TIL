@@ -1,0 +1,2672 @@
+# 내일배움캠프 240619 TIL
+Java 47일차
+My Select Shop 프로젝트(17~20)
+-------------------------------------------------------------------------------
+
+
+
+## 17. 회원기능 구현
+
+- API 구현
+    - 회원 DB에 매핑되는 **@Entity 클래스** 구현
+        - **[코드 스니펫] User**
+            
+            ```java
+            package com.sparta.myselectshop.entity;
+            
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import lombok.NoArgsConstructor;
+            import lombok.Setter;
+            
+            @Entity
+            @Getter
+            @Setter
+            @NoArgsConstructor
+            @Table(name = "users")
+            public class User {
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+            
+                @Column(nullable = false, unique = true)
+                private String username;
+            
+                @Column(nullable = false)
+                private String password;
+            
+                @Column(nullable = false, unique = true)
+                private String email;
+            
+                @Column(nullable = false)
+                @Enumerated(value = EnumType.STRING)
+                private UserRoleEnum role;
+            
+                public User(String username, String password, String email, UserRoleEnum role) {
+                    this.username = username;
+                    this.password = password;
+                    this.email = email;
+                    this.role = role;
+                }
+            }
+            ```
+            
+        - **[코드 스니펫] UserRoleEnum**
+            
+            ```java
+            package com.sparta.myselectshop.entity;
+            
+            public enum UserRoleEnum {
+                USER(Authority.USER),  // 사용자 권한
+                ADMIN(Authority.ADMIN);  // 관리자 권한
+            
+                private final String authority;
+            
+                UserRoleEnum(String authority) {
+                    this.authority = authority;
+                }
+            
+                public String getAuthority() {
+                    return this.authority;
+                }
+            
+                public static class Authority {
+                    public static final String USER = "ROLE_USER";
+                    public static final String ADMIN = "ROLE_ADMIN";
+                }
+            }
+            ```
+            
+    - **[코드 스니펫] UserController**
+        
+        ```java
+        package com.sparta.myselectshop.controller;
+        
+        import com.sparta.myselectshop.dto.SignupRequestDto;
+        import com.sparta.myselectshop.dto.UserInfoDto;
+        import com.sparta.myselectshop.entity.UserRoleEnum;
+        import com.sparta.myselectshop.security.UserDetailsImpl;
+        import com.sparta.myselectshop.service.UserService;
+        import jakarta.validation.Valid;
+        import lombok.RequiredArgsConstructor;
+        import lombok.extern.slf4j.Slf4j;
+        import org.springframework.security.core.annotation.AuthenticationPrincipal;
+        import org.springframework.stereotype.Controller;
+        import org.springframework.validation.BindingResult;
+        import org.springframework.validation.FieldError;
+        import org.springframework.web.bind.annotation.GetMapping;
+        import org.springframework.web.bind.annotation.PostMapping;
+        import org.springframework.web.bind.annotation.RequestMapping;
+        import org.springframework.web.bind.annotation.ResponseBody;
+        
+        import java.util.List;
+        
+        @Slf4j
+        @Controller
+        @RequiredArgsConstructor
+        @RequestMapping("/api")
+        public class UserController {
+        
+            private final UserService userService;
+        
+            @GetMapping("/user/login-page")
+            public String loginPage() {
+                return "login";
+            }
+        
+            @GetMapping("/user/signup")
+            public String signupPage() {
+                return "signup";
+            }
+        
+            @PostMapping("/user/signup")
+            public String signup(@Valid SignupRequestDto requestDto, BindingResult bindingResult) {
+                // Validation 예외처리
+                List<FieldError> fieldErrors = bindingResult.getFieldErrors();
+                if(fieldErrors.size() > 0) {
+                    for (FieldError fieldError : bindingResult.getFieldErrors()) {
+                        log.error(fieldError.getField() + " 필드 : " + fieldError.getDefaultMessage());
+                    }
+                    return "redirect:/api/user/signup";
+                }
+        
+                userService.signup(requestDto);
+        
+                return "redirect:/api/user/login-page";
+            }
+        
+            // 회원 관련 정보 받기
+            @GetMapping("/user-info")
+            @ResponseBody
+            public UserInfoDto getUserInfo(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+                String username = userDetails.getUser().getUsername();
+                UserRoleEnum role = userDetails.getUser().getRole();
+                boolean isAdmin = (role == UserRoleEnum.ADMIN);
+        
+                return new UserInfoDto(username, isAdmin);
+            }
+        }
+        ```
+        
+    - **[코드 스니펫] SignupRequestDto**
+        
+        ```java
+        package com.sparta.myselectshop.dto;
+        
+        import jakarta.validation.constraints.Email;
+        import jakarta.validation.constraints.NotBlank;
+        import lombok.Getter;
+        import lombok.Setter;
+        
+        @Getter
+        @Setter
+        public class SignupRequestDto {
+            @NotBlank
+            private String username;
+            @NotBlank
+            private String password;
+            @Email
+            @NotBlank
+            private String email;
+            private boolean admin = false;
+            private String adminToken = "";
+        }
+        ```
+        
+    - 회원 정보 요청 API DTO
+        - **[코드 스니펫] UserInfoDto**
+            
+            ```java
+            package com.sparta.myselectshop.dto;
+            
+            import lombok.AllArgsConstructor;
+            import lombok.Getter;
+            
+            @Getter
+            @AllArgsConstructor
+            public class UserInfoDto {
+                String username;
+                boolean isAdmin;
+            }
+            ```
+            
+    - **[코드 스니펫] UserService**
+        
+        ```java
+        package com.sparta.myselectshop.service;
+        
+        import com.sparta.myselectshop.dto.SignupRequestDto;
+        import com.sparta.myselectshop.entity.User;
+        import com.sparta.myselectshop.entity.UserRoleEnum;
+        import com.sparta.myselectshop.repository.UserRepository;
+        import lombok.RequiredArgsConstructor;
+        import org.springframework.security.crypto.password.PasswordEncoder;
+        import org.springframework.stereotype.Service;
+        
+        import java.util.Optional;
+        
+        @Service
+        @RequiredArgsConstructor
+        public class UserService {
+        
+            private final UserRepository userRepository;
+            private final PasswordEncoder passwordEncoder;
+        
+            // ADMIN_TOKEN
+            private final String ADMIN_TOKEN = "AAABnvxRVklrnYxKZ0aHgTBcXukeZygoC";
+        
+            public void signup(SignupRequestDto requestDto) {
+                String username = requestDto.getUsername();
+                String password = passwordEncoder.encode(requestDto.getPassword());
+        
+                // 회원 중복 확인
+                Optional<User> checkUsername = userRepository.findByUsername(username);
+                if (checkUsername.isPresent()) {
+                    throw new IllegalArgumentException("중복된 사용자가 존재합니다.");
+                }
+        
+                // email 중복확인
+                String email = requestDto.getEmail();
+                Optional<User> checkEmail = userRepository.findByEmail(email);
+                if (checkEmail.isPresent()) {
+                    throw new IllegalArgumentException("중복된 Email 입니다.");
+                }
+        
+                // 사용자 ROLE 확인
+                UserRoleEnum role = UserRoleEnum.USER;
+                if (requestDto.isAdmin()) {
+                    if (!ADMIN_TOKEN.equals(requestDto.getAdminToken())) {
+                        throw new IllegalArgumentException("관리자 암호가 틀려 등록이 불가능합니다.");
+                    }
+                    role = UserRoleEnum.ADMIN;
+                }
+        
+                // 사용자 등록
+                User user = new User(username, password, email, role);
+                userRepository.save(user);
+            }
+        }
+        ```
+        
+    - **[코드 스니펫] UserRepository**
+        
+        ```java
+        package com.sparta.myselectshop.repository;
+        
+        import com.sparta.myselectshop.entity.User;
+        import org.springframework.data.jpa.repository.JpaRepository;
+        
+        import java.util.Optional;
+        
+        public interface UserRepository extends JpaRepository<User, Long> {
+            Optional<User> findByUsername(String username);
+            Optional<User> findByEmail(String email);
+        }
+        ```
+        
+    
+    - 회원 기능 및 JWT 인증 방식의 변경으로 인한 Client 코드 변경
+        - **[코드 스니펫] basic.js**
+            
+            ```jsx
+            const host = 'http://' + window.location.host;
+            let targetId;
+            
+            $(document).ready(function () {
+                const auth = getToken();
+            
+                if (auth !== undefined && auth !== '') {
+                    $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+                        jqXHR.setRequestHeader('Authorization', auth);
+                    });
+                } else {
+                    window.location.href = host + '/api/user/login-page';
+                    return;
+                }
+            
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/user-info`,
+                    contentType: 'application/json',
+                })
+                    .done(function (res, status, xhr) {
+                        const username = res.username;
+                        const isAdmin = !!res.admin;
+            
+                        if (!username) {
+                            window.location.href = '/api/user/login-page';
+                            return;
+                        }
+            
+                        $('#username').text(username);
+                        if (isAdmin) {
+                            $('#admin').text(true);
+                            showProduct(true);
+                        } else {
+                            showProduct();
+                        }
+                    })
+                    .fail(function (jqXHR, textStatus) {
+                        logout();
+                    });
+            
+                // id 가 query 인 녀석 위에서 엔터를 누르면 execSearch() 함수를 실행하라는 뜻입니다.
+                $('#query').on('keypress', function (e) {
+                    if (e.key == 'Enter') {
+                        execSearch();
+                    }
+                });
+                $('#close').on('click', function () {
+                    $('#container').removeClass('active');
+                })
+                $('#close2').on('click', function () {
+                    $('#container2').removeClass('active');
+                })
+                $('.nav div.nav-see').on('click', function () {
+                    $('div.nav-see').addClass('active');
+                    $('div.nav-search').removeClass('active');
+            
+                    $('#see-area').show();
+                    $('#search-area').hide();
+                })
+                $('.nav div.nav-search').on('click', function () {
+                    $('div.nav-see').removeClass('active');
+                    $('div.nav-search').addClass('active');
+            
+                    $('#see-area').hide();
+                    $('#search-area').show();
+                })
+            
+                $('#see-area').show();
+                $('#search-area').hide();
+            })
+            
+            function numberWithCommas(x) {
+                return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+            
+            function execSearch() {
+                /**
+                 * 검색어 input id: query
+                 * 검색결과 목록: #search-result-box
+                 * 검색결과 HTML 만드는 함수: addHTML
+                 */
+                    // 1. 검색창의 입력값을 가져온다.
+                let query = $('#query').val();
+            
+                // 2. 검색창 입력값을 검사하고, 입력하지 않았을 경우 focus.
+                if (query == '') {
+                    alert('검색어를 입력해주세요');
+                    $('#query').focus();
+                    return;
+                }
+                // 3. GET /api/search?query=${query} 요청
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/search?query=${query}`,
+                    success: function (response) {
+                        $('#search-result-box').empty();
+                        // 4. for 문마다 itemDto를 꺼내서 HTML 만들고 검색결과 목록에 붙이기!
+                        for (let i = 0; i < response.length; i++) {
+                            let itemDto = response[i];
+                            let tempHtml = addHTML(itemDto);
+                            $('#search-result-box').append(tempHtml);
+                        }
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            
+            }
+            
+            function addHTML(itemDto) {
+                /**
+                 * class="search-itemDto" 인 녀석에서
+                 * image, title, lprice, addProduct 활용하기
+                 * 참고) onclick='addProduct(${JSON.stringify(itemDto)})'
+                 */
+                return `<div class="search-itemDto">
+                    <div class="search-itemDto-left">
+                        <img src="${itemDto.image}" alt="">
+                    </div>
+                    <div class="search-itemDto-center">
+                        <div>${itemDto.title}</div>
+                        <div class="price">
+                            ${numberWithCommas(itemDto.lprice)}
+                            <span class="unit">원</span>
+                        </div>
+                    </div>
+                    <div class="search-itemDto-right">
+                        <img src="../images/icon-save.png" alt="" onclick='addProduct(${JSON.stringify(itemDto)})'>
+                    </div>
+                </div>`
+            }
+            
+            function addProduct(itemDto) {
+                /**
+                 * modal 뜨게 하는 법: $('#container').addClass('active');
+                 * data를 ajax로 전달할 때는 두 가지가 매우 중요
+                 * 1. contentType: "application/json",
+                 * 2. data: JSON.stringify(itemDto),
+                 */
+            
+                // 1. POST /api/products 에 관심 상품 생성 요청
+                $.ajax({
+                    type: 'POST',
+                    url: '/api/products',
+                    contentType: 'application/json',
+                    data: JSON.stringify(itemDto),
+                    success: function (response) {
+                        // 2. 응답 함수에서 modal을 뜨게 하고, targetId 를 reponse.id 로 설정
+                        $('#container').addClass('active');
+                        targetId = response.id;
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                });
+            }
+            
+            function showProduct(isAdmin = false) {
+                /**
+                 * 관심상품 목록: #product-container
+                 * 검색결과 목록: #search-result-box
+                 * 관심상품 HTML 만드는 함수: addProductItem
+                 */
+            
+                let dataSource = null;
+            
+                // admin 계정
+                if (isAdmin) {
+                    dataSource = `/api/admin/products`;
+                } else {
+                    dataSource = `/api/products`;
+                }
+            
+                $.ajax({
+                    type: 'GET',
+                    url: dataSource,
+                    contentType: 'application/json',
+                    success: function (response) {
+                        $('#product-container').empty();
+                        for (let i = 0; i < response.length; i++) {
+                            let product = response[i];
+                            let tempHtml = addProductItem(product);
+                            $('#product-container').append(tempHtml);
+                        }
+                    },
+                    error(error, status, request) {
+                        if (error.status === 403) {
+                            $('html').html(error.responseText);
+                            return;
+                        }
+                        logout();
+                    }
+                });
+            }
+            
+            function addProductItem(product) {
+                console.log(product)
+                return `<div class="product-card">
+                            <div onclick="window.location.href='${product.link}'">
+                                <div class="card-header">
+                                    <img src="${product.image}"
+                                         alt="">
+                                </div>
+                                <div class="card-body">
+                                    <div class="title">
+                                        ${product.title}
+                                    </div>
+                                    <div class="lprice">
+                                        <span>${numberWithCommas(product.lprice)}</span>원
+                                    </div>
+                                    <div class="isgood ${product.lprice > product.myprice ? 'none' : ''}">
+                                        최저가
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+            }
+            
+            function setMyprice() {
+                /**
+                 * 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                 * 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                 * 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                 *    주의) contentType: "application/json",
+                 *         data: JSON.stringify({myprice: myprice}),
+                 *         빠뜨리지 말 것!
+                 * 4. 모달을 종료한다. $('#container').removeClass('active');
+                 * 5, 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                 * 6. 창을 새로고침한다. window.location.reload();
+                 */
+                    // 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                let myprice = $('#myprice').val();
+                // 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                if (myprice == '') {
+                    alert('올바른 가격을 입력해주세요');
+                    return;
+                }
+            
+                // 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                $.ajax({
+                    type: 'PUT',
+                    url: `/api/products/${targetId}`,
+                    contentType: 'application/json',
+                    data: JSON.stringify({myprice: myprice}),
+                    success: function (response) {
+            
+                        // 4. 모달을 종료한다. $('#container').removeClass('active');
+                        $('#container').removeClass('active');
+                        // 5. 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                        alert('성공적으로 등록되었습니다.');
+                        // 6. 창을 새로고침한다. window.location.reload();
+                        window.location.reload();
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            }
+            
+            function logout() {
+                // 토큰 삭제
+                Cookies.remove('Authorization', {path: '/'});
+                window.location.href = host + '/api/user/login-page';
+            }
+            
+            function getToken() {
+                let auth = Cookies.get('Authorization');
+            
+                if (auth === undefined) {
+                    return '';
+                }
+            
+                return auth;
+            }
+            ```
+            
+        - **[코드 스니펫] index.html**
+            
+            ```html
+            <!doctype html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport"
+                    content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+              <meta http-equiv="X-UA-Compatible" content="ie=edge">
+              <meta property="og:title" content="00만의 셀렉샵">
+              <meta property="og:description" content="관심상품을 선택하고, 최저가 알림을 확인해보세요!">
+              <meta property="og:image" content="images/og_selectshop.png">
+              <link rel="stylesheet" href="/css/style.css">
+              <script src="https://code.jquery.com/jquery-3.7.0.min.js"
+                      integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+              <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+              <script src="/js/basic.js"></script>
+              <title>나만의 셀렉샵</title>
+            </head>
+            <body>
+            <div class="header" style="position:relative;">
+              <!--headr-->
+              <div id="header-title-login-user">
+                <span id="username"></span> 님의
+              </div>
+              <div id="header-title-select-shop">
+                Select Shop
+              </div>
+              <a id="login-text" href="javascript:logout()">
+                로그아웃
+              </a>
+              <!--/headr-->
+            </div>
+            <div class="nav">
+              <div class="nav-see active">
+                모아보기
+              </div>
+              <div class="nav-search">
+                탐색하기
+              </div>
+            </div>
+            <div id="see-area">
+              <div id="product-container">
+            
+              </div>
+            </div>
+            <div id="search-area">
+              <div>
+                <input type="text" id="query">
+              </div>
+              <div id="search-result-box">
+            
+              </div>
+              <div id="container" class="popup-container">
+                <div class="popup">
+                  <button id="close" class="close">
+                    X
+                  </button>
+                  <h1>⏰최저가 설정하기</h1>
+                  <p>최저가를 설정해두면 선택하신 상품의 최저가가 떴을 때<br/> 표시해드려요!</p>
+                  <div>
+                    <input type="text" id="myprice" placeholder="200,000">원
+                  </div>
+                  <button class="cta" onclick="setMyprice()">설정하기</button>
+                </div>
+              </div>
+            </div>
+            
+            <input type="hidden" id="admin"/>
+            </body>
+            </html>
+            ```
+            
+        - **[코드 스니펫] login.html**
+            
+            ```html
+            <!DOCTYPE html>
+            <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport"
+                      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+                <meta http-equiv="X-UA-Compatible" content="ie=edge">
+                <link rel="preconnect" href="https://fonts.gstatic.com">
+                <link rel="stylesheet" type="text/css" href="/css/style.css">
+                <script src="https://code.jquery.com/jquery-3.7.0.min.js"
+                        integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+                <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+                <meta charset="UTF-8">
+                <title>로그인 페이지</title>
+            </head>
+            <body>
+            <div id="login-form">
+                <div id="login-title">Log into Select Shop</div>
+                <br>
+                <button id="login-id-btn" onclick="location.href='/api/user/signup'">
+                    회원 가입하기
+                </button>
+                <div>
+                    <div class="login-id-label">아이디</div>
+                    <input type="text" name="username" id="username" class="login-input-box">
+            
+                    <div class="login-id-label">비밀번호</div>
+                    <input type="password" name="password" id="password" class="login-input-box">
+            
+                    <button id="login-id-submit" onclick="onLogin()">로그인</button>
+                </div>
+                <div id="login-failed" style="display:none" class="alert alert-danger" role="alert">로그인에 실패하였습니다.</div>
+            </div>
+            </body>
+            <script>
+                $(document).ready(function () {
+                    // 토큰 삭제
+                    Cookies.remove('Authorization', {path: '/'});
+                });
+            
+                const href = location.href;
+                const queryString = href.substring(href.indexOf("?") + 1)
+                if (queryString === 'error') {
+                    const errorDiv = document.getElementById('login-failed');
+                    errorDiv.style.display = 'block';
+                }
+            
+                const host = 'http://' + window.location.host;
+            
+                function onLogin() {
+                    let username = $('#username').val();
+                    let password = $('#password').val();
+            
+                    $.ajax({
+                        type: "POST",
+                        url: `/api/user/login`,
+                        contentType: "application/json",
+                        data: JSON.stringify({username: username, password: password}),
+                    })
+                        .done(function (res, status, xhr) {
+                            const token = xhr.getResponseHeader('Authorization');
+            
+                            Cookies.set('Authorization', token, {path: '/'})
+            
+                            $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+                                jqXHR.setRequestHeader('Authorization', token);
+                            });
+            
+                            window.location.href = host;
+                        })
+                        .fail(function (jqXHR, textStatus) {
+                            alert("Login Fail");
+                            window.location.href = host + '/api/user/login-page?error'
+                        });
+                }
+            </script>
+            </html>
+            ```
+            
+        - **[코드 스니펫] signup.html**
+            
+            ```html
+            <!DOCTYPE html>
+            <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport"
+                    content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+              <meta http-equiv="X-UA-Compatible" content="ie=edge">
+              <link rel="preconnect" href="https://fonts.gstatic.com">
+              <link rel="stylesheet" type="text/css" href="/css/style.css">
+              <meta charset="UTF-8">
+              <title>회원가입 페이지</title>
+              <script>
+                function onclickAdmin() {
+                  // Get the checkbox
+                  var checkBox = document.getElementById("admin-check");
+                  // Get the output text
+                  var box = document.getElementById("admin-token");
+            
+                  // If the checkbox is checked, display the output text
+                  if (checkBox.checked == true){
+                    box.style.display = "block";
+                  } else {
+                    box.style.display = "none";
+                  }
+                }
+              </script>
+            </head>
+            <body>
+            <div id="login-form">
+              <div id="login-title">Sign up Select Shop</div>
+            
+              <form action="/api/user/signup" method="post">
+                <div class="login-id-label">Username</div>
+                <input type="text" name="username" placeholder="Username" class="login-input-box">
+            
+                <div class="login-id-label">Password</div>
+                <input type="password" name="password" class="login-input-box">
+            
+                <div class="login-id-label">E-mail</div>
+                <input type="text" name="email" placeholder="E-mail" class="login-input-box">
+            
+                <div>
+                  <input id="admin-check" type="checkbox" name="admin" onclick="onclickAdmin()" style="margin-top: 40px;">관리자
+                  <input id="admin-token" type="password" name="adminToken" placeholder="관리자 암호" class="login-input-box" style="display:none">
+                </div>
+                <button id="login-id-submit">회원 가입</button>
+              </form>
+            </div>
+            </body>
+            </html>
+            ```
+            
+        
+- JWT 로그인 인증 처리 (Filter)
+    
+    <aside>
+    📌 Client와 Server가 JWT를 주고받는 방식은 개발자가 선택합니다.
+    이전 강의에서 배웠던 방식은 JWT를 생성한 서버에서 쿠키를 직접 생성해 Client로 전달했습니다.
+    
+    ![Screen Shot 2023-05-24 at 12.48.09 PM.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/917a38f0-e198-471c-8d74-fe920ad59f81/Screen_Shot_2023-05-24_at_12.48.09_PM.png)
+    
+    그러면 이처럼 응답 Header에 Set-Cookie로 값이 전달됩니다.
+    
+    그럼 따로 Client에서 쿠키를 직접 쿠키 저장소에 저장하지 않아도 자동으로 해당 값이 저장됩니다.
+    
+    또한 이전 강의에서는 Client에서 따로 Header에 JWT를 직접 담아서 보내지 않고 서버에서 Request에 담긴 쿠키 값들 중 JWT에 해당하는 값을 가져와 사용했습니다.
+    
+    이번에는 Client와 Server 모두 JWT를 직접 HTTP Header에 담아서 전달받는 방식으로 구현해보겠습니다.
+    
+    </aside>
+    
+    - JWT 사용 흐름
+        1. Client 가 username, password 로 로그인 성공 시
+            1. 서버에서 "로그인 정보" → JWT 로 **암호화** (Secret Key 사용)
+                
+                **Sample**
+                
+                ![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/ef10ce2a-181e-4cf4-95bc-3a985e00fb6f/Untitled.png)
+                
+            2. **JWT** 를 Client 응답 Header에 전달
+                1. 응답 **Header** 에 아래 **형태**로 JWT 전달
+                    
+                    ```
+                    **Authorization: Bearer** <JWT>
+                    
+                    ex)
+                    **Authorization: Bearer** eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzcGFydGEiLCJVU0VSTkFNRSI6IuultO2DhOydtCIsIlVTRVJfUk9MRSI6IlJPTEVfVVNFUiIsIkVYUCI6MTYxODU1Mzg5OH0.9WTrWxCWx3YvaKZG14khp21fjkU1VjZV4e9VEf05Hok
+                    ```
+                    
+                    !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/57dc742b-fc4b-47e2-8bcb-b3fd709d75d8/Untitled.png
+                    
+                
+            3. Client 에서 JWT 저장 (쿠키)
+            
+        2. Client 에서 JWT 통해 인증방법
+            1. JWT 를 API 요청 시마다 Header 에 포함
+                
+                예) HTTP Headers
+                
+                ```
+                Content-Type: application/json
+                **Authorization: Bearer** **<JWT>
+                ...**
+                ```
+                
+            2. Server
+                1. Client 가 전달한 **JWT 위조 여부 검증** (Secret Key 사용)
+                2. JWT 유효기간이 지나지 않았는지 검증
+                3. 검증 성공시,
+                    1. JWT → 에서 사용자 정보를 가져와 확인
+                        
+                        ex) **GET /api/products** : JWT 보낸 사용자의 관심상품 목록 조회
+                        
+            
+    - **JwtUtil**
+        - [코드 스니펫] **JwtUtil**
+            
+            ```java
+            package com.sparta.myselectshop.jwt;
+            
+            import com.sparta.myselectshop.entity.UserRoleEnum;
+            import io.jsonwebtoken.*;
+            import io.jsonwebtoken.security.Keys;
+            import jakarta.annotation.PostConstruct;
+            import jakarta.servlet.http.HttpServletRequest;
+            import lombok.extern.slf4j.Slf4j;
+            import org.springframework.beans.factory.annotation.Value;
+            import org.springframework.stereotype.Component;
+            import org.springframework.util.StringUtils;
+            
+            import java.security.Key;
+            import java.util.Base64;
+            import java.util.Date;
+            
+            @Slf4j(topic = "JwtUtil")
+            @Component
+            public class JwtUtil {
+                // Header KEY 값
+                public static final String AUTHORIZATION_HEADER = "Authorization";
+                // 사용자 권한 값의 KEY
+                public static final String AUTHORIZATION_KEY = "auth";
+                // Token 식별자
+                public static final String BEARER_PREFIX = "Bearer ";
+                // 토큰 만료시간
+                private final long TOKEN_TIME = 60 * 60 * 1000L; // 60분
+            
+                @Value("${jwt.secret.key}") // Base64 Encode 한 SecretKey
+                private String secretKey;
+                private Key key;
+                private final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
+            
+                @PostConstruct
+                public void init() {
+                    byte[] bytes = Base64.getDecoder().decode(secretKey);
+                    key = Keys.hmacShaKeyFor(bytes);
+                }
+            
+                // 토큰 생성
+                public String createToken(String username, UserRoleEnum role) {
+                    Date date = new Date();
+            
+                    return BEARER_PREFIX +
+                            Jwts.builder()
+                                    .setSubject(username) // 사용자 식별자값(ID)
+                                    .claim(AUTHORIZATION_KEY, role) // 사용자 권한
+                                    .setExpiration(new Date(date.getTime() + TOKEN_TIME)) // 만료 시간
+                                    .setIssuedAt(date) // 발급일
+                                    .signWith(key, signatureAlgorithm) // 암호화 알고리즘
+                                    .compact();
+                }
+            
+                // header 에서 JWT 가져오기
+                public String getJwtFromHeader(HttpServletRequest request) {
+                    String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
+                    if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
+                        return bearerToken.substring(7);
+                    }
+                    return null;
+                }
+            
+                // 토큰 검증
+                public boolean validateToken(String token) {
+                    try {
+                        Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+                        return true;
+                    } catch (SecurityException | MalformedJwtException | SignatureException e) {
+                        log.error("Invalid JWT signature, 유효하지 않는 JWT 서명 입니다.");
+                    } catch (ExpiredJwtException e) {
+                        log.error("Expired JWT token, 만료된 JWT token 입니다.");
+                    } catch (UnsupportedJwtException e) {
+                        log.error("Unsupported JWT token, 지원되지 않는 JWT 토큰 입니다.");
+                    } catch (IllegalArgumentException e) {
+                        log.error("JWT claims is empty, 잘못된 JWT 토큰 입니다.");
+                    }
+                    return false;
+                }
+            
+                // 토큰에서 사용자 정보 가져오기
+                public Claims getUserInfoFromToken(String token) {
+                    return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+                }
+            }
+            ```
+            
+    - Spring Security 적용
+        - 'Spring Security' 활성화
+            - UserDetails & UserDetailsService 구현
+                - **[코드 스니펫]  UserDetailsImpl**
+                    
+                    ```java
+                    package com.sparta.myselectshop.security;
+                    
+                    import com.sparta.myselectshop.entity.User;
+                    import com.sparta.myselectshop.entity.UserRoleEnum;
+                    import org.springframework.security.core.GrantedAuthority;
+                    import org.springframework.security.core.authority.SimpleGrantedAuthority;
+                    import org.springframework.security.core.userdetails.UserDetails;
+                    
+                    import java.util.ArrayList;
+                    import java.util.Collection;
+                    
+                    public class UserDetailsImpl implements UserDetails {
+                    
+                        private final User user;
+                    
+                        public UserDetailsImpl(User user) {
+                            this.user = user;
+                        }
+                    
+                        public User getUser() {
+                            return user;
+                        }
+                    
+                        @Override
+                        public String getPassword() {
+                            return user.getPassword();
+                        }
+                    
+                        @Override
+                        public String getUsername() {
+                            return user.getUsername();
+                        }
+                    
+                        @Override
+                        public Collection<? extends GrantedAuthority> getAuthorities() {
+                            UserRoleEnum role = user.getRole();
+                            String authority = role.getAuthority();
+                    
+                            SimpleGrantedAuthority simpleGrantedAuthority = new SimpleGrantedAuthority(authority);
+                            Collection<GrantedAuthority> authorities = new ArrayList<>();
+                            authorities.add(simpleGrantedAuthority);
+                    
+                            return authorities;
+                        }
+                    
+                        @Override
+                        public boolean isAccountNonExpired() {
+                            return true;
+                        }
+                    
+                        @Override
+                        public boolean isAccountNonLocked() {
+                            return true;
+                        }
+                    
+                        @Override
+                        public boolean isCredentialsNonExpired() {
+                            return true;
+                        }
+                    
+                        @Override
+                        public boolean isEnabled() {
+                            return true;
+                        }
+                    }
+                    ```
+                    
+                - **[코드 스니펫]  UserDetailsServiceImpl**
+                    
+                    ```java
+                    package com.sparta.myselectshop.security;
+                    
+                    import com.sparta.myselectshop.entity.User;
+                    import com.sparta.myselectshop.repository.UserRepository;
+                    import lombok.RequiredArgsConstructor;
+                    import org.springframework.security.core.userdetails.UserDetails;
+                    import org.springframework.security.core.userdetails.UserDetailsService;
+                    import org.springframework.security.core.userdetails.UsernameNotFoundException;
+                    import org.springframework.stereotype.Service;
+                    
+                    @Service
+                    @RequiredArgsConstructor
+                    public class UserDetailsServiceImpl implements UserDetailsService {
+                    
+                        private final UserRepository userRepository;
+                    
+                        @Override
+                        public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+                            User user = userRepository.findByUsername(username)
+                                    .orElseThrow(() -> new UsernameNotFoundException("Not Found " + username));
+                    
+                            return new UserDetailsImpl(user);
+                        }
+                    }
+                    ```
+                    
+            - **JwtAuthenticationFilter** : 로그인 진행 및 JWT 생성
+                - **[코드 스니펫] LoginRequestDto**
+                    
+                    ```java
+                    package com.sparta.myselectshop.dto;
+                    
+                    import lombok.Getter;
+                    import lombok.Setter;
+                    
+                    @Setter
+                    @Getter
+                    public class LoginRequestDto {
+                        private String username;
+                        private String password;
+                    }
+                    ```
+                    
+                - [코드 스니펫] **JwtAuthenticationFilter**
+                    
+                    ```java
+                    package com.sparta.myselectshop.security;
+                    
+                    import com.fasterxml.jackson.databind.ObjectMapper;
+                    import com.sparta.myselectshop.dto.LoginRequestDto;
+                    import com.sparta.myselectshop.entity.UserRoleEnum;
+                    import com.sparta.myselectshop.jwt.JwtUtil;
+                    import jakarta.servlet.FilterChain;
+                    import jakarta.servlet.http.HttpServletRequest;
+                    import jakarta.servlet.http.HttpServletResponse;
+                    import lombok.extern.slf4j.Slf4j;
+                    import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+                    import org.springframework.security.core.Authentication;
+                    import org.springframework.security.core.AuthenticationException;
+                    import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+                    
+                    import java.io.IOException;
+                    
+                    @Slf4j(topic = "로그인 및 JWT 생성")
+                    public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+                        private final JwtUtil jwtUtil;
+                    
+                        public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+                            this.jwtUtil = jwtUtil;
+                            setFilterProcessesUrl("/api/user/login");
+                        }
+                    
+                        @Override
+                        public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
+                            try {
+                                LoginRequestDto requestDto = new ObjectMapper().readValue(request.getInputStream(), LoginRequestDto.class);
+                    
+                                return getAuthenticationManager().authenticate(
+                                        new UsernamePasswordAuthenticationToken(
+                                                requestDto.getUsername(),
+                                                requestDto.getPassword(),
+                                                null
+                                        )
+                                );
+                            } catch (IOException e) {
+                                log.error(e.getMessage());
+                                throw new RuntimeException(e.getMessage());
+                            }
+                        }
+                    
+                        @Override
+                        protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) {
+                            String username = ((UserDetailsImpl) authResult.getPrincipal()).getUsername();
+                            UserRoleEnum role = ((UserDetailsImpl) authResult.getPrincipal()).getUser().getRole();
+                    
+                            String token = jwtUtil.createToken(username, role);
+                            response.addHeader(JwtUtil.AUTHORIZATION_HEADER, token);
+                        }
+                    
+                        @Override
+                        protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response, AuthenticationException failed) {
+                            response.setStatus(401);
+                        }
+                    
+                    }
+                    ```
+                    
+            - **JwtAuthorizationFilter** : API에 전달되는 JWT 유효성 검증 및 인가 처리
+                - [코드 스니펫] **JwtAuthorizationFilter**
+                    
+                    ```java
+                    package com.sparta.myselectshop.security;
+                    
+                    import com.sparta.myselectshop.jwt.JwtUtil;
+                    import io.jsonwebtoken.Claims;
+                    import jakarta.servlet.FilterChain;
+                    import jakarta.servlet.ServletException;
+                    import jakarta.servlet.http.HttpServletRequest;
+                    import jakarta.servlet.http.HttpServletResponse;
+                    import lombok.extern.slf4j.Slf4j;
+                    import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+                    import org.springframework.security.core.Authentication;
+                    import org.springframework.security.core.context.SecurityContext;
+                    import org.springframework.security.core.context.SecurityContextHolder;
+                    import org.springframework.security.core.userdetails.UserDetails;
+                    import org.springframework.util.StringUtils;
+                    import org.springframework.web.filter.OncePerRequestFilter;
+                    
+                    import java.io.IOException;
+                    
+                    @Slf4j(topic = "JWT 검증 및 인가")
+                    public class JwtAuthorizationFilter extends OncePerRequestFilter {
+                    
+                        private final JwtUtil jwtUtil;
+                        private final UserDetailsServiceImpl userDetailsService;
+                    
+                        public JwtAuthorizationFilter(JwtUtil jwtUtil, UserDetailsServiceImpl userDetailsService) {
+                            this.jwtUtil = jwtUtil;
+                            this.userDetailsService = userDetailsService;
+                        }
+                    
+                        @Override
+                        protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain filterChain) throws ServletException, IOException {
+                    
+                            String tokenValue = jwtUtil.getJwtFromHeader(req);
+                    
+                            if (StringUtils.hasText(tokenValue)) {
+                    
+                                if (!jwtUtil.validateToken(tokenValue)) {
+                                    log.error("Token Error");
+                                    return;
+                                }
+                    
+                                Claims info = jwtUtil.getUserInfoFromToken(tokenValue);
+                    
+                                try {
+                                    setAuthentication(info.getSubject());
+                                } catch (Exception e) {
+                                    log.error(e.getMessage());
+                                    return;
+                                }
+                            }
+                    
+                            filterChain.doFilter(req, res);
+                        }
+                    
+                        // 인증 처리
+                        public void setAuthentication(String username) {
+                            SecurityContext context = SecurityContextHolder.createEmptyContext();
+                            Authentication authentication = createAuthentication(username);
+                            context.setAuthentication(authentication);
+                    
+                            SecurityContextHolder.setContext(context);
+                        }
+                    
+                        // 인증 객체 생성
+                        private Authentication createAuthentication(String username) {
+                            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                            return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                        }
+                    }
+                    ```
+                    
+            - 'Spring Security' 설정 및 인증/인가 필터 등록
+                - **[코드 스니펫] WebSecurityConfig**
+                    
+                    ```java
+                    package com.sparta.myselectshop.config;
+                    
+                    import com.sparta.myselectshop.jwt.JwtUtil;
+                    import com.sparta.myselectshop.security.JwtAuthenticationFilter;
+                    import com.sparta.myselectshop.security.JwtAuthorizationFilter;
+                    import com.sparta.myselectshop.security.UserDetailsServiceImpl;
+                    import lombok.RequiredArgsConstructor;
+                    import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
+                    import org.springframework.context.annotation.Bean;
+                    import org.springframework.context.annotation.Configuration;
+                    import org.springframework.security.authentication.AuthenticationManager;
+                    import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+                    import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+                    import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+                    import org.springframework.security.config.http.SessionCreationPolicy;
+                    import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+                    import org.springframework.security.crypto.password.PasswordEncoder;
+                    import org.springframework.security.web.SecurityFilterChain;
+                    import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+                    
+                    @Configuration
+                    @EnableWebSecurity // Spring Security 지원을 가능하게 함
+                    @RequiredArgsConstructor
+                    public class WebSecurityConfig {
+                    
+                        private final JwtUtil jwtUtil;
+                        private final UserDetailsServiceImpl userDetailsService;
+                        private final AuthenticationConfiguration authenticationConfiguration;
+                    
+                        @Bean
+                        public PasswordEncoder passwordEncoder() {
+                            return new BCryptPasswordEncoder();
+                        }
+                    
+                        @Bean
+                        public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+                            return configuration.getAuthenticationManager();
+                        }
+                    
+                        @Bean
+                        public JwtAuthenticationFilter jwtAuthenticationFilter() throws Exception {
+                            JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtUtil);
+                            filter.setAuthenticationManager(authenticationManager(authenticationConfiguration));
+                            return filter;
+                        }
+                    
+                        @Bean
+                        public JwtAuthorizationFilter jwtAuthorizationFilter() {
+                            return new JwtAuthorizationFilter(jwtUtil, userDetailsService);
+                        }
+                    
+                        @Bean
+                        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                            // CSRF 설정
+                            http.csrf((csrf) -> csrf.disable());
+                    
+                            // 기본 설정인 Session 방식은 사용하지 않고 JWT 방식을 사용하기 위한 설정
+                            http.sessionManagement((sessionManagement) ->
+                                    sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                            );
+                    
+                            http.authorizeHttpRequests((authorizeHttpRequests) ->
+                                    authorizeHttpRequests
+                                            .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll() // resources 접근 허용 설정
+                                            .requestMatchers("/").permitAll() // 메인 페이지 요청 허가
+                                            .requestMatchers("/api/user/**").permitAll() // '/api/user/'로 시작하는 요청 모두 접근 허가
+                                            .anyRequest().authenticated() // 그 외 모든 요청 인증처리
+                            );
+                    
+                            http.formLogin((formLogin) ->
+                                    formLogin
+                                            .loginPage("/api/user/login-page").permitAll()
+                            );
+                    
+                            // 필터 관리
+                            http.addFilterBefore(jwtAuthorizationFilter(), JwtAuthenticationFilter.class);
+                            http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+                    
+                            return http.build();
+                        }
+                    }
+                    ```
+                    
+                
+
+## 18. 회원별 상품 API 구현
+
+- 상품과 회원의 관계
+    1. 상품 등록 시 누구의 상품인지 등록이 필요합니다.
+        - 관심 상품 등록 시, 등록을 요청한 "회원 정보" 추가가 필요합니다.
+    2. 상품과 회원의 관계를 생각 해봅니다.
+        
+        ![data.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/fc653ddc-58d8-42e4-b76c-4f8f6b97e691/data.png)
+        
+        <aside>
+        👉 상품 : 회원 = N : 1
+        
+        </aside>
+        
+        - 상품과 회원은 다대일 관계입니다.
+        - 즉, 한명의 회원은 다수의 상품을 가질 수 있습니다.
+            - My 셀렉샵의 상품은 검색 API를 사용하여 검색한 상품을 관심 상품으로 등록하는 것이기 때문에 만약 같은 상품이 검색되어 여러 회원에게 등록 되더라도 서비스 상에서는 다른 상품으로 인지됩니다.
+    3. 연관관계의 방향을 선택합니다.
+        - 회원 객체에서 상품 객체를 조회하는 경우가 없기 때문에 상품과 회원을  N : 1 단방향 연관관계로 설정하겠습니다.
+            - **Product**
+                
+                ```java
+                @ManyToOne(fetch = FetchType.LAZY)
+                @JoinColumn(name = "user_id", nullable = false)
+                private User user;
+                ```
+                
+    
+- 상품 등록 및 조회 구현
+    - Controller에서 로그인 회원 정보를 받아 Service 로 전달
+        
+        ```java
+        // 관심 상품 등록하기
+        @PostMapping("/products")
+        public ProductResponseDto createProduct(@RequestBody ProductRequestDto requestDto, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+            // 응답 보내기
+            return productService.createProduct(requestDto, userDetails.getUser());
+        }
+        
+        // 관심 상품 조회하기
+        @GetMapping("/products")
+        public List<ProductResponseDto> getProducts(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+            // 응답 보내기
+            return productService.getProducts(userDetails.getUser());
+        }
+        ```
+        
+    - Service에서 회원별 상품 등록 및 조회 구현
+        
+        ```java
+        public ProductResponseDto createProduct(ProductRequestDto requestDto, User user) {
+            Product product = productRepository.save(new Product(requestDto, user));
+            return new ProductResponseDto(product);
+        }
+        
+        public List<ProductResponseDto> getProducts(User user) {
+            List<Product> productList = productRepository.findALlByUser(user);
+            List<ProductResponseDto> responseDtoList = new ArrayList<>();
+        
+            for (Product product : productList) {
+                responseDtoList.add(new ProductResponseDto(product));
+            }
+            return responseDtoList;
+        }
+        ```
+        
+    - Repository에 회원별 상품을 조회하는 메서드 추가
+        
+        ```java
+        public interface ProductRepository extends JpaRepository<Product, Long> {
+            List<Product> findALlByUser(User user);
+        }
+        ```
+        
+    - Admin 계정 모든 상품 조회 기능 추가
+        - **ProductController**
+            
+            ```java
+            // 관리자 조회
+            @GetMapping("/admin/products")
+            public List<ProductResponseDto> getAllProducts() {
+                return productService.getAllProducts();
+            }
+            ```
+            
+        - **ProductService**
+            
+            ```java
+            public List<ProductResponseDto> getAllProducts() {
+                List<Product> productList = productRepository.findAll();
+                List<ProductResponseDto> responseDtoList = new ArrayList<>();
+            
+                for (Product product : productList) {
+                    responseDtoList.add(new ProductResponseDto(product));
+                }
+                return responseDtoList;
+            }
+            ```
+            
+        
+
+## 19. 상품 페이징 및 정렬
+
+- 페이징 및 정렬 설계
+    - UI
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6ad2967e-cc45-4ee7-9a42-a5563b62bb9a/Untitled.png
+        
+    - 상품 조회 API 수정 필요 (**GET /api/products**)
+    - **Client → Server**
+        
+        ![Screen Shot 2022-11-07 at 11.04.06 AM.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6d21246a-17b4-4383-af71-e3d2302bb25f/Screen_Shot_2022-11-07_at_11.04.06_AM.png)
+        
+        1. 페이징
+            1. page :  조회할 페이지 번호 (**1부터 시작**)
+            2. size : 한 페이지에 보여줄 상품 개수 (**10개로 고정**!)
+        2. 정렬
+            1. sortBy (정렬 항목)
+                1. id : Product 테이블의 id
+                2. title : 상품명
+                3. lprice : 최저가
+            2.  isAsc (오름차순?)
+                1. true: 오름차순 (asc)
+                2. false : 내림차순 (desc)
+                
+    - **Server → Client**
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/f966bae7-2173-4970-9837-066270e83c56/Untitled.png
+        
+        - number : 조회된 페이지 번호 (**0부터 시작**)
+        - content : 조회된 상품 정보 (배열)
+        - size : 한 페이지에 보여줄 상품 개수
+        - numberOfElements : 실제 조회된 상품 개수
+        - totalElements : 전체 상품 개수 (회원이 등록한 모든 상품의 개수)
+        - totalPages : 전체 페이지 수
+            
+            ```java
+            totalPages = totalElement / size 결과를 소수점 올림
+            1 / 10 = 0.1 => 총 1 페이지
+            9 / 10 = 0.9 => 총 1페이지
+            10 / 10 = 1 => 총 1페이지
+            11 / 10 => 1.1 => 총 2페이지
+            
+            ```
+            
+        - first: 첫 페이지인지? (boolean)
+        - last: 마지막 페이지인지? (boolean)
+        - Spring Data 페이징, 정렬 기능 확인하기
+            - Spring Data에서 페이징 및 정렬 기능을 제공하기 때문에 손쉽게 페이징, 정렬을 구현할 수 있습니다.
+            
+            ```java
+            Sort.Direction direction = isAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
+            Sort sort = Sort.by(direction, sortBy);
+            Pageable pageable = PageRequest.of(page, size, sort);
+            
+            Page<Product> products = productRepository.findAllByUser(user, pageable);
+            ```
+            
+            - Pageable은 손쉽게 페이징, 정렬 처리를 하기위해 제공되는 인터페이스이며 PageRequest는 해당 인터페이스의 구현체입니다.
+            - 파라미터로 (현재 페이지(0시작), 데이터 노출 개수,  정렬 방법(ASC, DESC))
+            - 를 전달하여 생성된 Pageable 구현 객체를 Spring Data JPA의 Query Method 파라미터에 함께 전달하면 페이징 및 정렬 처리가 완료된 데이터를 Page 타입으로 반환합니다.
+            - Page 타입에는 Client에 전달해야할 데이터인 totalPages, totalElements등의 데이터를 함께 포함하고 있습니다.
+        
+- 페이징 및 정렬 구현
+    - 페이징 및 정렬 기능 추가로 인한 Client 코드 변경
+        - **[코드 스니펫] basic.js**
+            
+            ```jsx
+            const host = 'http://' + window.location.host;
+            let targetId;
+            
+            $(document).ready(function () {
+                const auth = getToken();
+            
+                if (auth !== undefined && auth !== '') {
+                    $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+                        jqXHR.setRequestHeader('Authorization', auth);
+                    });
+                } else {
+                    window.location.href = host + '/api/user/login-page';
+                    return;
+                }
+            
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/user-info`,
+                    contentType: 'application/json',
+                })
+                    .done(function (res, status, xhr) {
+                        const username = res.username;
+                        const isAdmin = !!res.admin;
+            
+                        if (!username) {
+                            window.location.href = '/api/user/login-page';
+                            return;
+                        }
+            
+                        $('#username').text(username);
+                        if (isAdmin) {
+                            $('#admin').text(true);
+                            showProduct();
+                        } else {
+                            showProduct();
+                        }
+                    })
+                    .fail(function (jqXHR, textStatus) {
+                        logout();
+                    });
+            
+                // id 가 query 인 녀석 위에서 엔터를 누르면 execSearch() 함수를 실행하라는 뜻입니다.
+                $('#query').on('keypress', function (e) {
+                    if (e.key == 'Enter') {
+                        execSearch();
+                    }
+                });
+                $('#close').on('click', function () {
+                    $('#container').removeClass('active');
+                })
+                $('#close2').on('click', function () {
+                    $('#container2').removeClass('active');
+                })
+                $('.nav div.nav-see').on('click', function () {
+                    $('div.nav-see').addClass('active');
+                    $('div.nav-search').removeClass('active');
+            
+                    $('#see-area').show();
+                    $('#search-area').hide();
+                })
+                $('.nav div.nav-search').on('click', function () {
+                    $('div.nav-see').removeClass('active');
+                    $('div.nav-search').addClass('active');
+            
+                    $('#see-area').hide();
+                    $('#search-area').show();
+                })
+            
+                $('#see-area').show();
+                $('#search-area').hide();
+            })
+            
+            function numberWithCommas(x) {
+                return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+            
+            function execSearch() {
+                /**
+                 * 검색어 input id: query
+                 * 검색결과 목록: #search-result-box
+                 * 검색결과 HTML 만드는 함수: addHTML
+                 */
+                    // 1. 검색창의 입력값을 가져온다.
+                let query = $('#query').val();
+            
+                // 2. 검색창 입력값을 검사하고, 입력하지 않았을 경우 focus.
+                if (query == '') {
+                    alert('검색어를 입력해주세요');
+                    $('#query').focus();
+                    return;
+                }
+                // 3. GET /api/search?query=${query} 요청
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/search?query=${query}`,
+                    success: function (response) {
+                        $('#search-result-box').empty();
+                        // 4. for 문마다 itemDto를 꺼내서 HTML 만들고 검색결과 목록에 붙이기!
+                        for (let i = 0; i < response.length; i++) {
+                            let itemDto = response[i];
+                            let tempHtml = addHTML(itemDto);
+                            $('#search-result-box').append(tempHtml);
+                        }
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            
+            }
+            
+            function addHTML(itemDto) {
+                /**
+                 * class="search-itemDto" 인 녀석에서
+                 * image, title, lprice, addProduct 활용하기
+                 * 참고) onclick='addProduct(${JSON.stringify(itemDto)})'
+                 */
+                return `<div class="search-itemDto">
+                    <div class="search-itemDto-left">
+                        <img src="${itemDto.image}" alt="">
+                    </div>
+                    <div class="search-itemDto-center">
+                        <div>${itemDto.title}</div>
+                        <div class="price">
+                            ${numberWithCommas(itemDto.lprice)}
+                            <span class="unit">원</span>
+                        </div>
+                    </div>
+                    <div class="search-itemDto-right">
+                        <img src="../images/icon-save.png" alt="" onclick='addProduct(${JSON.stringify(itemDto)})'>
+                    </div>
+                </div>`
+            }
+            
+            function addProduct(itemDto) {
+                /**
+                 * modal 뜨게 하는 법: $('#container').addClass('active');
+                 * data를 ajax로 전달할 때는 두 가지가 매우 중요
+                 * 1. contentType: "application/json",
+                 * 2. data: JSON.stringify(itemDto),
+                 */
+            
+                // 1. POST /api/products 에 관심 상품 생성 요청
+                $.ajax({
+                    type: 'POST',
+                    url: '/api/products',
+                    contentType: 'application/json',
+                    data: JSON.stringify(itemDto),
+                    success: function (response) {
+                        // 2. 응답 함수에서 modal을 뜨게 하고, targetId 를 reponse.id 로 설정
+                        $('#container').addClass('active');
+                        targetId = response.id;
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                });
+            }
+            
+            function showProduct() {
+                /**
+                 * 관심상품 목록: #product-container
+                 * 검색결과 목록: #search-result-box
+                 * 관심상품 HTML 만드는 함수: addProductItem
+                 */
+            
+                let dataSource = null;
+            
+                var sorting = $("#sorting option:selected").val();
+                var isAsc = $(':radio[name="isAsc"]:checked').val();
+            
+                dataSource = `/api/products?sortBy=${sorting}&isAsc=${isAsc}`;
+            
+                $('#product-container').empty();
+                $('#search-result-box').empty();
+                $('#pagination').pagination({
+                    dataSource,
+                    locator: 'content',
+                    alias: {
+                        pageNumber: 'page',
+                        pageSize: 'size'
+                    },
+                    totalNumberLocator: (response) => {
+                        return response.totalElements;
+                    },
+                    pageSize: 10,
+                    showPrevious: true,
+                    showNext: true,
+                    ajax: {
+                        error(error, status, request) {
+                            if (error.status === 403) {
+                                $('html').html(error.responseText);
+                                return;
+                            }
+                            logout();
+                        }
+                    },
+                    callback: function(response, pagination) {
+                        $('#product-container').empty();
+                        for (let i = 0; i < response.length; i++) {
+                            let product = response[i];
+                            let tempHtml = addProductItem(product);
+                            $('#product-container').append(tempHtml);
+                        }
+                    }
+                });
+            }
+            
+            function addProductItem(product) {
+                console.log(product)
+                return `<div class="product-card">
+                            <div onclick="window.location.href='${product.link}'">
+                                <div class="card-header">
+                                    <img src="${product.image}"
+                                         alt="">
+                                </div>
+                                <div class="card-body">
+                                    <div class="title">
+                                        ${product.title}
+                                    </div>
+                                    <div class="lprice">
+                                        <span>${numberWithCommas(product.lprice)}</span>원
+                                    </div>
+                                    <div class="isgood ${product.lprice > product.myprice ? 'none' : ''}">
+                                        최저가
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+            }
+            
+            function setMyprice() {
+                /**
+                 * 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                 * 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                 * 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                 *    주의) contentType: "application/json",
+                 *         data: JSON.stringify({myprice: myprice}),
+                 *         빠뜨리지 말 것!
+                 * 4. 모달을 종료한다. $('#container').removeClass('active');
+                 * 5, 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                 * 6. 창을 새로고침한다. window.location.reload();
+                 */
+                    // 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                let myprice = $('#myprice').val();
+                // 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                if (myprice == '') {
+                    alert('올바른 가격을 입력해주세요');
+                    return;
+                }
+            
+                // 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                $.ajax({
+                    type: 'PUT',
+                    url: `/api/products/${targetId}`,
+                    contentType: 'application/json',
+                    data: JSON.stringify({myprice: myprice}),
+                    success: function (response) {
+            
+                        // 4. 모달을 종료한다. $('#container').removeClass('active');
+                        $('#container').removeClass('active');
+                        // 5. 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                        alert('성공적으로 등록되었습니다.');
+                        // 6. 창을 새로고침한다. window.location.reload();
+                        window.location.reload();
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            }
+            
+            function logout() {
+                // 토큰 삭제
+                Cookies.remove('Authorization', {path: '/'});
+                window.location.href = host + '/api/user/login-page';
+            }
+            
+            function getToken() {
+                let auth = Cookies.get('Authorization');
+            
+                if(auth === undefined) {
+                    return '';
+                }
+            
+                return auth;
+            }
+            ```
+            
+        - **[코드 스니펫] index.html**
+            
+            ```html
+            <!doctype html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport"
+                      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+                <meta http-equiv="X-UA-Compatible" content="ie=edge">
+                <link rel="preconnect" href="https://fonts.gstatic.com">
+                <script src="https://code.jquery.com/jquery-3.7.0.min.js"
+                        integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+                <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/paginationjs/2.1.4/pagination.min.js"></script>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/paginationjs/2.1.4/pagination.css"/>
+            
+                <link rel="stylesheet" href="/css/style.css">
+                <script src="/js/basic.js"></script>
+                <title>나만의 셀렉샵</title>
+            </head>
+            <body>
+            <div class="header" style="position:relative;">
+                <!--headr-->
+                <div id="header-title-login-user">
+                    <span id="username"></span> 님의
+                </div>
+                <div id="header-title-select-shop">
+                    Select Shop
+                </div>
+                <a id="login-text" href="javascript:logout()">
+                    로그아웃
+                </a>
+                <!--/headr-->
+            </div>
+            <div class="nav">
+                <div class="nav-see active">
+                    모아보기
+                </div>
+                <div class="nav-search">
+                    탐색하기
+                </div>
+            </div>
+            <div id="see-area">
+                <div class="pagination">
+                    정렬:
+                    <select id="sorting" onchange="showProduct()">
+                        <option value="id">ID</option>
+                        <option value="title">상품명</option>
+                        <option value="lprice">최저가</option>
+                    </select>
+                    <input type="radio" name="isAsc" value="true" onchange="showProduct()" checked/> 오름차순
+                    <input type="radio" name="isAsc" value="false" onchange="showProduct()"/> 내림차순
+                </div>
+                <div id="pagination" class="pagination"></div>
+                <br>
+                <div id="product-container">
+            
+                </div>
+            </div>
+            <div id="search-area">
+                <div>
+                    <input type="text" id="query">
+                </div>
+                <div id="search-result-box">
+            
+                </div>
+                <div id="container" class="popup-container">
+                    <div class="popup">
+                        <button id="close" class="close">
+                            X
+                        </button>
+                        <h1>⏰최저가 설정하기</h1>
+                        <p>최저가를 설정해두면 선택하신 상품의 최저가가 떴을 때<br/> 표시해드려요!</p>
+                        <div>
+                            <input type="text" id="myprice" placeholder="200,000">원
+                        </div>
+                        <button class="cta" onclick="setMyprice()">설정하기</button>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="hidden" id="admin"/>
+            </body>
+            </html>
+            ```
+            
+    - 페이징 및 정렬 기능 추가로 인한 Server 코드 변경
+        - **ProductController**
+            
+            ```java
+            // 관심 상품 조회하기
+            @GetMapping("/products")
+            public Page<ProductResponseDto> getProducts(
+                    @RequestParam("page") int page,
+                    @RequestParam("size") int size,
+                    @RequestParam("sortBy") String sortBy,
+                    @RequestParam("isAsc") boolean isAsc,
+                    @AuthenticationPrincipal UserDetailsImpl userDetails) {
+                // 응답 보내기
+                return productService.getProducts(userDetails.getUser(),  page-1, size, sortBy, isAsc);
+            }
+            ```
+            
+        - **ProductService**
+            
+            ```java
+            public Page<ProductResponseDto> getProducts(User user,
+                                                        int page, int size, String sortBy, boolean isAsc) {
+                // 페이징 처리
+                Sort.Direction direction = isAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
+                Sort sort = Sort.by(direction, sortBy);
+                Pageable pageable = PageRequest.of(page, size, sort);
+            
+                // 사용자 권한 가져와서 ADMIN 이면 전체 조회, USER 면 본인이 추가한 부분 조회
+                UserRoleEnum userRoleEnum = user.getRole();
+            
+                Page<Product> productList;
+            
+                if (userRoleEnum == UserRoleEnum.USER) {
+                    // 사용자 권한이 USER 일 경우
+                    productList = productRepository.findAllByUser(user, pageable);
+                } else {
+                    productList = productRepository.findAll(pageable);
+                }
+            
+                return productList.map(ProductResponseDto::new);
+            }
+            ```
+            
+        - **ProductRepository**
+            
+            ```java
+            public interface ProductRepository extends JpaRepository<Product, Long> {
+                Page<Product> findAllByUser(User user, Pageable pageable);
+            }
+            ```
+            
+    
+- 테스트 데이터 생성
+    - **[코드 스니펫] util > TestDataRunner**
+        
+        ```java
+        package com.sparta.myselectshop.util;
+        
+        import com.sparta.myselectshop.entity.Product;
+        import com.sparta.myselectshop.entity.User;
+        import com.sparta.myselectshop.entity.UserRoleEnum;
+        import com.sparta.myselectshop.naver.dto.ItemDto;
+        import com.sparta.myselectshop.naver.service.NaverApiService;
+        import com.sparta.myselectshop.repository.ProductRepository;
+        import com.sparta.myselectshop.repository.UserRepository;
+        import com.sparta.myselectshop.service.UserService;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.boot.ApplicationArguments;
+        import org.springframework.boot.ApplicationRunner;
+        import org.springframework.security.crypto.password.PasswordEncoder;
+        import org.springframework.stereotype.Component;
+        
+        import java.util.ArrayList;
+        import java.util.List;
+        
+        import static com.sparta.myselectshop.service.ProductService.MIN_MY_PRICE;
+        
+        @Component
+        public class TestDataRunner implements ApplicationRunner {
+        
+            @Autowired
+            UserService userService;
+            @Autowired
+            ProductRepository productRepository;
+            @Autowired
+            UserRepository userRepository;
+            @Autowired
+            PasswordEncoder passwordEncoder;
+            @Autowired
+            NaverApiService naverApiService;
+        
+            @Override
+            public void run(ApplicationArguments args) {
+                // 테스트 User 생성
+                User testUser = new User("Robbie", passwordEncoder.encode("1234"), "robbie@sparta.com", UserRoleEnum.USER);
+                testUser = userRepository.save(testUser);
+        
+                // 테스트 User 의 관심상품 등록
+                // 검색어 당 관심상품 10개 등록
+                createTestData(testUser, "신발");
+                createTestData(testUser, "과자");
+                createTestData(testUser, "키보드");
+                createTestData(testUser, "휴지");
+                createTestData(testUser, "휴대폰");
+                createTestData(testUser, "앨범");
+                createTestData(testUser, "헤드폰");
+                createTestData(testUser, "이어폰");
+                createTestData(testUser, "노트북");
+                createTestData(testUser, "무선 이어폰");
+                createTestData(testUser, "모니터");
+            }
+        
+            private void createTestData(User user, String searchWord) {
+                // 네이버 쇼핑 API 통해 상품 검색
+                List<ItemDto> itemDtoList = naverApiService.searchItems(searchWord);
+        
+                List<Product> productList = new ArrayList<>();
+        
+                for (ItemDto itemDto : itemDtoList) {
+                    Product product = new Product();
+                    // 관심상품 저장 사용자
+                    product.setUser(user);
+                    // 관심상품 정보
+                    product.setTitle(itemDto.getTitle());
+                    product.setLink(itemDto.getLink());
+                    product.setImage(itemDto.getImage());
+                    product.setLprice(itemDto.getLprice());
+        
+                    // 희망 최저가 랜덤값 생성
+                    // 최저 (100원) ~ 최대 (상품의 현재 최저가 + 10000원)
+                    int myPrice = getRandomNumber(MIN_MY_PRICE, itemDto.getLprice() + 10000);
+                    product.setMyprice(myPrice);
+        
+                    productList.add(product);
+                }
+        
+                productRepository.saveAll(productList);
+            }
+        
+            public int getRandomNumber(int min, int max) {
+                return (int) ((Math.random() * (max - min)) + min);
+            }
+        }
+        ```
+        
+    
+
+## 20. 상품 폴더 설계
+
+- 요구사항 분석
+    
+    !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/e454c30f-9363-4e05-8a11-a9ca2c567287/Untitled.png
+    
+    1. 배경
+        1. 회원들 중 페이지네이션 기능만으로는 원하는 관심상품을 쉽게 찾기 어렵다는 불만이 많이 접수되었습니다.
+        2. 따라서 폴더 별로 관심상품을 저장/관리할 수 있는 기능을 추가하기로 결정났습니다.
+        
+    2. 요구사항
+        1. 폴더 생성
+            1. 회원별 폴더를 추가할 수 있습니다.
+            2. 폴더를 추가할 때 1개~N개를 한번에 추가할 수 있습니다.
+                
+                !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/782a4107-6e8c-4a39-acf0-8fafc5a01a90/Untitled.png
+                
+        2. 관심상품에 폴더 설정
+            1. 관심상품에 폴더는 N개 설정할 수 있습니다.
+            2. 관심상품이 등록되는 시점에는 어느 폴더에도 저장되지 않습니다.
+            3. 관심상품 별로 1번에서 생성한 폴더를 선택하여 추가할 수 있습니다.
+                
+                !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/8708dd4e-68c7-4623-bd3d-9547f2107473/Untitled.png
+                
+        3. 폴더 별 조회
+            1. 회원은 폴더 별로 관심상품 조회가 가능합니다.
+                
+                !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6de70d19-6823-4993-85ff-b49818abe09e/Untitled.png
+                
+            2. 조회 방법
+                1. '전체' 클릭 시: 폴더와 상관 없이 회원이 저장한 전체 관심상품들을 조회 가능합니다.
+                2. '폴더명' 클릭 시: 폴더별 저장된 관심상품들을 조회 가능합니다.
+                
+    - 폴더 기능 추가로 인한 Client 코드 변경
+        - **[코드 스니펫] basic.js**
+            
+            ```jsx
+            const host = 'http://' + window.location.host;
+            let targetId;
+            let folderTargetId;
+            
+            $(document).ready(function () {
+                const auth = getToken();
+            
+                if (auth !== undefined && auth !== '') {
+                    $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+                        jqXHR.setRequestHeader('Authorization', auth);
+                    });
+                } else {
+                    window.location.href = host + '/api/user/login-page';
+                    return;
+                }
+            
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/user-info`,
+                    contentType: 'application/json',
+                })
+                    .done(function (res, status, xhr) {
+                        const username = res.username;
+                        const isAdmin = !!res.admin;
+            
+                        if (!username) {
+                            window.location.href = '/api/user/login-page';
+                            return;
+                        }
+            
+                        $('#username').text(username);
+                        if (isAdmin) {
+                            $('#admin').text(true);
+                            showProduct();
+                        } else {
+                            showProduct();
+                        }
+            
+                        // 로그인한 유저의 폴더
+                        $.ajax({
+                            type: 'GET',
+                            url: `/api/user-folder`,
+                            error(error) {
+                                logout();
+                            }
+                        }).done(function (fragment) {
+                            $('#fragment').replaceWith(fragment);
+                        });
+            
+                    })
+                    .fail(function (jqXHR, textStatus) {
+                        logout();
+                    });
+            
+                // id 가 query 인 녀석 위에서 엔터를 누르면 execSearch() 함수를 실행하라는 뜻입니다.
+                $('#query').on('keypress', function (e) {
+                    if (e.key == 'Enter') {
+                        execSearch();
+                    }
+                });
+                $('#close').on('click', function () {
+                    $('#container').removeClass('active');
+                })
+                $('#close2').on('click', function () {
+                    $('#container2').removeClass('active');
+                })
+                $('.nav div.nav-see').on('click', function () {
+                    $('div.nav-see').addClass('active');
+                    $('div.nav-search').removeClass('active');
+            
+                    $('#see-area').show();
+                    $('#search-area').hide();
+                })
+                $('.nav div.nav-search').on('click', function () {
+                    $('div.nav-see').removeClass('active');
+                    $('div.nav-search').addClass('active');
+            
+                    $('#see-area').hide();
+                    $('#search-area').show();
+                })
+            
+                $('#see-area').show();
+                $('#search-area').hide();
+            })
+            
+            function numberWithCommas(x) {
+                return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+            
+            function execSearch() {
+                /**
+                 * 검색어 input id: query
+                 * 검색결과 목록: #search-result-box
+                 * 검색결과 HTML 만드는 함수: addHTML
+                 */
+                    // 1. 검색창의 입력값을 가져온다.
+                let query = $('#query').val();
+            
+                // 2. 검색창 입력값을 검사하고, 입력하지 않았을 경우 focus.
+                if (query == '') {
+                    alert('검색어를 입력해주세요');
+                    $('#query').focus();
+                    return;
+                }
+                // 3. GET /api/search?query=${query} 요청
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/search?query=${query}`,
+                    success: function (response) {
+                        $('#search-result-box').empty();
+                        // 4. for 문마다 itemDto를 꺼내서 HTML 만들고 검색결과 목록에 붙이기!
+                        for (let i = 0; i < response.length; i++) {
+                            let itemDto = response[i];
+                            let tempHtml = addHTML(itemDto);
+                            $('#search-result-box').append(tempHtml);
+                        }
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            
+            }
+            
+            function addHTML(itemDto) {
+                /**
+                 * class="search-itemDto" 인 녀석에서
+                 * image, title, lprice, addProduct 활용하기
+                 * 참고) onclick='addProduct(${JSON.stringify(itemDto)})'
+                 */
+                return `<div class="search-itemDto">
+                    <div class="search-itemDto-left">
+                        <img src="${itemDto.image}" alt="">
+                    </div>
+                    <div class="search-itemDto-center">
+                        <div>${itemDto.title}</div>
+                        <div class="price">
+                            ${numberWithCommas(itemDto.lprice)}
+                            <span class="unit">원</span>
+                        </div>
+                    </div>
+                    <div class="search-itemDto-right">
+                        <img src="../images/icon-save.png" alt="" onclick='addProduct(${JSON.stringify(itemDto)})'>
+                    </div>
+                </div>`
+            }
+            
+            function addProduct(itemDto) {
+                /**
+                 * modal 뜨게 하는 법: $('#container').addClass('active');
+                 * data를 ajax로 전달할 때는 두 가지가 매우 중요
+                 * 1. contentType: "application/json",
+                 * 2. data: JSON.stringify(itemDto),
+                 */
+            
+                // 1. POST /api/products 에 관심 상품 생성 요청
+                $.ajax({
+                    type: 'POST',
+                    url: '/api/products',
+                    contentType: 'application/json',
+                    data: JSON.stringify(itemDto),
+                    success: function (response) {
+                        // 2. 응답 함수에서 modal을 뜨게 하고, targetId 를 reponse.id 로 설정
+                        $('#container').addClass('active');
+                        targetId = response.id;
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                });
+            }
+            
+            function showProduct(folderId = null) {
+                /**
+                 * 관심상품 목록: #product-container
+                 * 검색결과 목록: #search-result-box
+                 * 관심상품 HTML 만드는 함수: addProductItem
+                 */
+            
+                let dataSource = null;
+            
+                var sorting = $("#sorting option:selected").val();
+                var isAsc = $(':radio[name="isAsc"]:checked').val();
+            
+                if (folderId) {
+                    dataSource = `/api/folders/${folderId}/products?sortBy=${sorting}&isAsc=${isAsc}`;
+                } else if(folderTargetId === undefined) {
+                    dataSource = `/api/products?sortBy=${sorting}&isAsc=${isAsc}&folderId=${folderId}`;
+                } else {
+                    dataSource = `/api/folders/${folderTargetId}/products?sortBy=${sorting}&isAsc=${isAsc}`;
+                }
+            
+                $('#product-container').empty();
+                $('#search-result-box').empty();
+                $('#pagination').pagination({
+                    dataSource,
+                    locator: 'content',
+                    alias: {
+                        pageNumber: 'page',
+                        pageSize: 'size'
+                    },
+                    totalNumberLocator: (response) => {
+                        return response.totalElements;
+                    },
+                    pageSize: 10,
+                    showPrevious: true,
+                    showNext: true,
+                    ajax: {
+                        beforeSend: function () {
+                            $('#product-container').html('상품 불러오는 중...');
+                        },
+                        error(error, status, request) {
+                            if (error.status === 403) {
+                                $('html').html(error.responseText);
+                                return;
+                            }
+                            logout();
+                        }
+                    },
+                    callback: function (response, pagination) {
+                        $('#product-container').empty();
+                        for (let i = 0; i < response.length; i++) {
+                            let product = response[i];
+                            let tempHtml = addProductItem(product);
+                            $('#product-container').append(tempHtml);
+                        }
+                    }
+                });
+            }
+            
+            // Folder 관련 기능
+            function openFolder(folderId) {
+                folderTargetId = folderId;
+                $("button.product-folder").removeClass("folder-active");
+                if (!folderId) {
+                    $("button#folder-all").addClass('folder-active');
+                } else {
+                    $(`button[value='${folderId}']`).addClass('folder-active');
+                }
+                showProduct(folderId);
+            }
+            
+            // 폴더 추가 팝업
+            function openAddFolderPopup() {
+                $('#container2').addClass('active');
+            }
+            
+            // 폴더 Input 추가
+            function addFolderInput() {
+                $('#folders-input').append(
+                    `<input type="text" class="folderToAdd" placeholder="추가할 폴더명">
+                   <span onclick="closeFolderInput(this)" style="margin-right:5px">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="30px" fill="red" class="bi bi-x-circle-fill" viewBox="0 0 16 16">
+                          <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+                        </svg>
+                   </span>
+                  `
+                );
+            }
+            
+            function closeFolderInput(folder) {
+                $(folder).prev().remove();
+                $(folder).next().remove();
+                $(folder).remove();
+            }
+            
+            function addFolder() {
+                const folderNames = $('.folderToAdd').toArray().map(input => input.value);
+                try {
+                    folderNames.forEach(name => {
+                        if (name === '') {
+                            alert('올바른 폴더명을 입력해주세요');
+                            throw new Error("stop loop");
+                        }
+                    });
+                } catch (e) {
+                    console.log(e);
+                    return;
+                }
+            
+                $.ajax({
+                    type: "POST",
+                    url: `/api/folders`,
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        folderNames
+                    })
+                }).done(function (data, textStatus, xhr) {
+                    if(data !== '') {
+                        alert("중복된 폴더입니다.");
+                        return;
+                    }
+                    $('#container2').removeClass('active');
+                    alert('성공적으로 등록되었습니다.');
+                    window.location.reload();
+                })
+                    .fail(function(xhr, textStatus, errorThrown) {
+                        alert("중복된 폴더입니다.");
+                    });
+            }
+            
+            function addProductItem(product) {
+                const folders = product.productFolderList.map(folder =>
+                    `
+                        <span onclick="openFolder(${folder.id})">
+                            #${folder.name}
+                        </span>
+                    `
+                );
+                return `<div class="product-card">
+                            <div onclick="window.location.href='${product.link}'">
+                                <div class="card-header">
+                                    <img src="${product.image}"
+                                         alt="">
+                                </div>
+                                <div class="card-body">
+                                    <div class="title">
+                                        ${product.title}
+                                    </div>
+                                    <div class="lprice">
+                                        <span>${numberWithCommas(product.lprice)}</span>원
+                                    </div>
+                                    <div class="isgood ${product.lprice > product.myprice ? 'none' : ''}">
+                                        최저가
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-tags" style="margin-bottom: 20px;">
+                                ${folders}
+                                <span onclick="addInputForProductToFolder(${product.id}, this)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="30px" fill="currentColor" class="bi bi-folder-plus" viewBox="0 0 16 16">
+                                        <path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.684.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/>
+                                        <path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5z"/>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>`;
+            }
+            
+            function addInputForProductToFolder(productId, button) {
+                $.ajax({
+                    type: 'GET',
+                    url: `/api/folders`,
+                    success: function (folders) {
+                        const options = folders.map(folder => `<option value="${folder.id}">${folder.name}</option>`)
+                        const form = `
+                            <span>
+                                <form id="folder-select" method="post" autocomplete="off" action="/api/products/${productId}/folder">
+                                    <select name="folderId" form="folder-select">
+                                        ${options}
+                                    </select>
+                                    <input type="submit" value="추가" style="padding: 5px; font-size: 12px; margin-left: 5px;">
+                                </form>
+                            </span>
+                        `;
+                        $(form).insertBefore(button);
+                        $(button).remove();
+                        $("#folder-select").on('submit', function (e) {
+                            e.preventDefault();
+                            $.ajax({
+                                type: $(this).prop('method'),
+                                url: $(this).prop('action'),
+                                data: $(this).serialize(),
+                            }).done(function (data, textStatus, xhr) {
+                                if(data !== '') {
+                                    alert("중복된 폴더입니다.");
+                                    return;
+                                }
+                                alert('성공적으로 등록되었습니다.');
+                                window.location.reload();
+                            })
+                                .fail(function(xhr, textStatus, errorThrown) {
+                                    alert("중복된 폴더입니다.");
+                                });
+                        });
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                });
+            }
+            
+            function setMyprice() {
+                /**
+                 * 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                 * 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                 * 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                 *    주의) contentType: "application/json",
+                 *         data: JSON.stringify({myprice: myprice}),
+                 *         빠뜨리지 말 것!
+                 * 4. 모달을 종료한다. $('#container').removeClass('active');
+                 * 5, 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                 * 6. 창을 새로고침한다. window.location.reload();
+                 */
+                    // 1. id가 myprice 인 input 태그에서 값을 가져온다.
+                let myprice = $('#myprice').val();
+                // 2. 만약 값을 입력하지 않았으면 alert를 띄우고 중단한다.
+                if (myprice == '') {
+                    alert('올바른 가격을 입력해주세요');
+                    return;
+                }
+            
+                // 3. PUT /api/product/${targetId} 에 data를 전달한다.
+                $.ajax({
+                    type: 'PUT',
+                    url: `/api/products/${targetId}`,
+                    contentType: 'application/json',
+                    data: JSON.stringify({myprice: myprice}),
+                    success: function (response) {
+            
+                        // 4. 모달을 종료한다. $('#container').removeClass('active');
+                        $('#container').removeClass('active');
+                        // 5. 성공적으로 등록되었음을 알리는 alert를 띄운다.
+                        alert('성공적으로 등록되었습니다.');
+                        // 6. 창을 새로고침한다. window.location.reload();
+                        window.location.reload();
+                    },
+                    error(error, status, request) {
+                        logout();
+                    }
+                })
+            }
+            
+            function logout() {
+                // 토큰 삭제
+                Cookies.remove('Authorization', {path: '/'});
+                window.location.href = host + '/api/user/login-page';
+            }
+            
+            function getToken() {
+                let auth = Cookies.get('Authorization');
+            
+                if(auth === undefined) {
+                    return '';
+                }
+            
+                return auth;
+            }
+            ```
+            
+        - **[코드 스니펫] index.html**
+            
+            ```html
+            <!doctype html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport"
+                      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+                <meta http-equiv="X-UA-Compatible" content="ie=edge">
+                <link rel="preconnect" href="https://fonts.gstatic.com">
+                <script src="https://code.jquery.com/jquery-3.7.0.min.js"
+                        integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+                <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/paginationjs/2.1.4/pagination.min.js"></script>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/paginationjs/2.1.4/pagination.css"/>
+            
+                <link rel="stylesheet" href="/css/style.css">
+                <script src="/js/basic.js"></script>
+                <title>나만의 셀렉샵</title>
+            </head>
+            <body>
+            <div class="header" style="position:relative;">
+                <!--headr-->
+                <div id="header-title-login-user">
+                    <span id="username"></span> 님의
+                </div>
+                <div id="header-title-select-shop">
+                    Select Shop
+                </div>
+                <a id="login-text" href="javascript:logout()">
+                    로그아웃
+                </a>
+                <!--/headr-->
+            </div>
+            <div class="nav">
+                <div class="nav-see active">
+                    모아보기
+                </div>
+                <div class="nav-search">
+                    탐색하기
+                </div>
+            </div>
+            <div id="see-area">
+                <div class="folder-bar folder-black">
+                    <div>
+                        <button id="folder-all" class="folder-bar-item folder-button product-folder folder-active" onclick="openFolder()">전체</button>
+                    </div>
+                    <div id="fragment">
+                        <div th:each="folder : ${folders}">
+                            <button class="folder-bar-item folder-button product-folder"
+                                    th:value="${folder.id}"
+                                    th:utext="${folder.name}"
+                                    th:attr="onclick=|openFolder(${folder.id})|">
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <button id="folder-add" class="folder-bar-item folder-button product-folder" onclick="openAddFolderPopup()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30px" fill="currentColor" class="bi bi-folder-plus" viewBox="0 0 16 16">
+                                <path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.684.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/>
+                                <path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="pagination">
+                    정렬:
+                    <select id="sorting" onchange="showProduct()">
+                        <option value="id">ID</option>
+                        <option value="title">상품명</option>
+                        <option value="lprice">최저가</option>
+                    </select>
+                    <input type="radio" name="isAsc" value="true" onchange="showProduct()" checked/> 오름차순
+                    <input type="radio" name="isAsc" value="false" onchange="showProduct()"/> 내림차순
+                </div>
+                <div id="pagination" class="pagination"></div>
+                <br>
+                <div id="product-container">
+                </div>
+                <div id="container2" class="popup-container">
+                    <div class="popup" style="width:410px; height:auto">
+                        <button id="close2" class="close">
+                            X
+                        </button>
+                        <h1>🗂 폴더 추가하기</h1>
+                        <p>폴더를 추가해서 관심상품을 관리해보세요!</p>
+                        <div id="folders-input">
+                            <input type="text" class="folderToAdd" placeholder="추가할 폴더명">
+                            <!--                <div class="control" data-v-79d84978="" style="width:20px"><a class="button is-primary is-outlined" data-v-79d84978=""><span class="icon" data-v-79d84978=""><svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="times" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 512" class="svg-inline&#45;&#45;fa fa-times fa-w-11" data-v-79d84978=""><path fill="currentColor" d="M242.72 256l100.07-100.07c12.28-12.28 12.28-32.19 0-44.48l-22.24-22.24c-12.28-12.28-32.19-12.28-44.48 0L176 189.28 75.93 89.21c-12.28-12.28-32.19-12.28-44.48 0L9.21 111.45c-12.28 12.28-12.28 32.19 0 44.48L109.28 256 9.21 356.07c-12.28 12.28-12.28 32.19 0 44.48l22.24 22.24c12.28 12.28 32.2 12.28 44.48 0L176 322.72l100.07 100.07c12.28 12.28 32.2 12.28 44.48 0l22.24-22.24c12.28-12.28 12.28-32.19 0-44.48L242.72 256z" data-v-79d84978="" class=""></path></svg></span></a></div>-->
+                        </div>
+                        <div onclick="addFolderInput()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30px" fill="currentColor" class="bi bi-folder-plus" viewBox="0 0 16 16">
+                                <path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.684.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/>
+                                <path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5z"/>
+                            </svg>
+                        </div>
+                        <button id="add-folder-btn" class="cta2" onclick="addFolder()">추가하기</button>
+                    </div>
+                </div>
+            </div>
+            <div id="search-area">
+                <div>
+                    <input type="text" id="query">
+                </div>
+                <div id="search-result-box">
+            
+                </div>
+                <div id="container" class="popup-container">
+                    <div class="popup">
+                        <button id="close" class="close">
+                            X
+                        </button>
+                        <h1>⏰최저가 설정하기</h1>
+                        <p>최저가를 설정해두면 선택하신 상품의 최저가가 떴을 때<br/> 표시해드려요!</p>
+                        <div>
+                            <input type="text" id="myprice" placeholder="200,000">원
+                        </div>
+                        <button class="cta" onclick="setMyprice()">설정하기</button>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="hidden" id="admin"/>
+            </body>
+            </html>
+            ```
+            
+        
+- 폴더 테이블 설계 및 폴더와 회원의 관계
+    - 폴더 테이블에 필요한 정보
+        1. **폴더명(name)**: 회원이 등록한 폴더 이름을 저장
+        2. **회원ID(user)**: 폴더를 등록한 회원의 ID 를 저장
+            - A 회원이 생성한 폴더는 A 회원에게만 보여야 합니다.
+            - 폴더와 회원의 관계
+                - '폴더와 회원'의 관계는 '상품과 회원'의 관계와 동일합니다.
+                
+                !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/a4968f41-278f-4089-af61-d346b70c504a/Untitled.png
+                
+                - 폴더 : 회원 = N : 1, 다대일 관계입니다.
+            - 회원 객체에서 폴더 객체를 조회하는 경우가 없기 때문에 폴더와 회원을  N : 1 단방향 연관관계로 설정하겠습니다.
+        - **[코드 스니펫] entity > Folder**
+            
+            ```java
+            package com.sparta.myselectshop.entity;
+            
+            import jakarta.persistence.*;
+            import lombok.Getter;
+            import lombok.NoArgsConstructor;
+            import lombok.Setter;
+            
+            @Entity
+            @Getter
+            @Setter
+            @NoArgsConstructor
+            @Table(name = "folder")
+            public class Folder {
+            
+                @Id
+                @GeneratedValue(strategy = GenerationType.IDENTITY)
+                private Long id;
+            
+                @Column(nullable = false)
+                private String name;
+            
+                @ManyToOne(fetch = FetchType.LAZY)
+                @JoinColumn(name = "user_id", nullable = false)
+                private User user;
+            
+                public Folder(String name, User user) {
+                    this.name = name;
+                    this.user = user;
+                }
+            }
+            ```
+            
+    
+- 상품과 폴더의 관계
+    1. 상품은 추가될 폴더의 정보가 필요합니다.
+        
+        ![data.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/37daa598-f0d4-417f-ab9a-4f4d43e8820d/data.png)
+        
+        - 관심 상품에 폴더를 등록합니다.
+        - 상품은 여러 개의 폴더를 등록할 수 있습니다.
+        - 폴더 : 상품 = N : 1
+    2. 폴더에 관심 상품을 등록합니다.
+        
+        ![data.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/24f91240-aba5-4cbc-9453-f41d2097aeb6/data.png)
+        
+        - 하나의 폴더는 여러 개의 상품을 포함할 수 있습니다.
+        - 폴더 : 상품 = 1 : N
+    3. 결과적으로 상품과 폴더는 N : M 다대다 관계입니다.
+        
+        ![data.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/a5d8f505-37fc-4dbf-b548-9f090d92c2c1/data.png)
+        
+        - @ManyToMany 애너테이션을 사용하여 다대다 관계를 풀 수도 있지만 상품_폴더 중간 테이블을 직접 만들어 풀어보겠습니다.
+        - 상품 : 상품_폴더 = 1 : N
+        - 폴더 : 상품_폴더 = 1 : N
+    4. 연관관계의 방향을 선택합니다.
+        - 관심 상품을 조회할 때 포함된 폴더들의 정보가 필요합니다. (상품 객체가 폴더 객체 조회 필요!)
+        - 상품 객체를 기준으로 해당 폴더에 포함된 상품들을 조회해야합니다. (상품 객체가 폴더 객체 조회 필요!)
+        - 따라서 상품과 상품_폴더는 양방향 연관관계로 설정하겠습니다.
+        - 폴더 객체에서 상품 객체를 조회하지 않을 예정이기 때문에 폴더는 상품_폴더와 관계를 맺지 않겠습니다.
+    - **[코드 스니펫] entity > ProductFolder**
+        
+        ```java
+        package com.sparta.myselectshop.entity;
+        
+        import jakarta.persistence.*;
+        import lombok.Getter;
+        import lombok.NoArgsConstructor;
+        import lombok.Setter;
+        
+        @Entity
+        @Getter
+        @Setter
+        @NoArgsConstructor
+        @Table(name = "product_folder")
+        public class ProductFolder {
+            @Id
+            @GeneratedValue(strategy = GenerationType.IDENTITY)
+            private Long id;
+        
+            @ManyToOne(fetch = FetchType.LAZY)
+            @JoinColumn(name = "product_id", nullable = false)
+            private Product product;
+        
+            @ManyToOne(fetch = FetchType.LAZY)
+            @JoinColumn(name = "folder_id", nullable = false)
+            private Folder folder;
+        
+            public ProductFolder(Product product, Folder folder) {
+                this.product = product;
+                this.folder = folder;
+            }
+        }
+        ```
+        
+    - **Product**
+        
+        ```java
+        @OneToMany(mappedBy = "product")
+        private List<ProductFolder> productFolderList = new ArrayList<>();
+        ```

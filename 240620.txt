@@ -1,0 +1,328 @@
+# 내일배움캠프 240620 TIL
+Java 48일차
+My Select Shop 프로젝트(21 ~ 23)
+-------------------------------------------------------------------------------
+
+
+
+## 21. 폴더 생성 및 조회 구현
+
+- 요구사항
+    1. 회원별 폴더를 추가할 수 있습니다.
+    2. 폴더를 추가할 때 1개~N개를 한번에 추가할 수 있습니다.
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/782a4107-6e8c-4a39-acf0-8fafc5a01a90/Untitled.png
+        
+    3. 회원별 저장한 폴더들이 조회 되어야 합니다.
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6de70d19-6823-4993-85ff-b49818abe09e/Untitled.png
+        
+    
+- API 설계 및 구현
+    
+    [제목 없는 데이터베이스](https://www.notion.so/c906ff75613a483983f075c26a59dcf4?pvs=21)
+    
+    1. 회원의 폴더 생성
+        - **FolderController**
+            
+            ```java
+            @PostMapping("/folders")
+            public void addFolders(@RequestBody FolderRequestDto folderRequestDto,
+                                   @AuthenticationPrincipal UserDetailsImpl userDetails) {
+            
+                List<String> folderNames = folderRequestDto.getFolderNames();
+            
+                folderService.addFolders(folderNames, userDetails.getUser());
+            }
+            ```
+            
+            - **[코드 스니펫] FolderRequestDto**
+                
+                ```java
+                package com.sparta.myselectshop.dto;
+                
+                import lombok.Getter;
+                
+                import java.util.List;
+                
+                @Getter
+                public class FolderRequestDto {
+                    List<String> folderNames;
+                }
+                ```
+                
+        - **FolderService**
+            
+            ```java
+            // 로그인한 회원에 폴더들 등록
+            public void addFolders(List<String> folderNames, User user) {
+            
+                // 입력으로 들어온 폴더 이름을 기준으로, 회원이 이미 생성한 폴더들을 조회합니다.
+                List<Folder> existFolderList = folderRepository.findAllByUserAndNameIn(user, folderNames);
+            
+                List<Folder> folderList = new ArrayList<>();
+            
+                for (String folderName : folderNames) {
+                    // 이미 생성한 폴더가 아닌 경우만 폴더 생성
+                    if (!isExistFolderName(folderName, existFolderList)) {
+                        Folder folder = new Folder(folderName, user);
+                        folderList.add(folder);
+                    } else {
+                        throw new IllegalArgumentException("폴더명이 중복되었습니다.");
+                    }
+                }
+            
+                folderRepository.saveAll(folderList);
+            }
+            
+            private Boolean isExistFolderName(String folderName, List<Folder> existFolderList) {
+                // 기존 폴더 리스트에서 folder name 이 있는지?
+                for (Folder existFolder : existFolderList) {
+                    if(folderName.equals(existFolder.getName())) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            ```
+            
+        - **FolderRepository**
+            
+            ```java
+            public interface FolderRepository extends JpaRepository<Folder, Long> {
+                List<Folder> findAllByUserAndNameIn(User user, List<String> folderNames);
+            }
+            ```
+            
+    2. 회원이 저장한 폴더 조회
+        - **UserController**
+            
+            ```java
+            // 로그인 한 유저가 메인 페이지를 요청할 때 가지고있는 폴더를 반환
+            @GetMapping("/user-folder")
+            public String getUserInfo(Model model, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+            
+                model.addAttribute("folders", folderService.getFolders(userDetails.getUser()));
+            
+                return "index :: #fragment";
+            }
+            ```
+            
+        - **FolderService**
+            
+            ```java
+            // 로그인한 회원이 등록된 모든 폴더 조회
+            public List<FolderResponseDto> getFolders(User user) {
+                List<Folder> folderList = folderRepository.findAllByUser(user);
+                List<FolderResponseDto> responseDtoList = new ArrayList<>();
+            
+                for (Folder folder : folderList) {
+                    responseDtoList.add(new FolderResponseDto(folder));
+                }
+                
+                return responseDtoList;
+            }
+            ```
+            
+            - **[코드 스니펫] FolderResponseDto**
+                
+                ```java
+                package com.sparta.myselectshop.dto;
+                
+                import com.sparta.myselectshop.entity.Folder;
+                import lombok.Getter;
+                
+                @Getter
+                public class FolderResponseDto {
+                    private Long id;
+                    private String name;
+                
+                    public FolderResponseDto(Folder folder) {
+                        this.id = folder.getId();
+                        this.name = folder.getName();
+                    }
+                }
+                ```
+                
+        - **FolderRepository**
+            
+            ```java
+            public interface FolderRepository extends JpaRepository<Folder, Long> {
+                List<Folder> findAllByUser(User user);
+                List<Folder> findAllByUserAndNameIn(User user, List<String> folderNames);
+            }
+            ```
+            
+        - **ProductResponseDto**
+            
+            ```java
+            private List<FolderResponseDto> productFolderList = new ArrayList<>();
+            
+            public ProductResponseDto(Product product) {
+                this.id = product.getId();
+                this.title = product.getTitle();
+                this.link = product.getLink();
+                this.image = product.getImage();
+                this.lprice = product.getLprice();
+                this.myprice = product.getMyprice();
+                for (ProductFolder productFolder : product.getProductFolderList()) {
+                    productFolderList.add(new FolderResponseDto(productFolder.getFolder()));
+                }
+            }
+            ```
+            
+
+## 22. 관심 상품에 폴더 추가 구현
+
+- 요구사항
+    1. 관심상품에 폴더를 0개 ~ N개 설정할 수 있습니다.
+    2. 관심상품이 등록되는 시점에는 어느 폴더에도 저장되지 않습니다.
+    3. 관심상품 별로 기 생성 했던 폴더를 선택하여 추가할 수 있습니다.
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/8708dd4e-68c7-4623-bd3d-9547f2107473/Untitled.png
+        
+    - 폴더 전체 조회 및 선택
+        
+        ![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/61066395-0383-4b76-87c3-436bfc09e7b9/Untitled.png)
+        
+    
+- API 설계 및 구현
+    
+    [제목 없는 데이터베이스](https://www.notion.so/c0bdc7c98f014638a746aca9fcf8ddb1?pvs=21)
+    
+    1. 폴더 전체 조회
+        - **FolderController**
+            
+            ```java
+            // 회원이 등록한 모든 폴더 조회
+            @GetMapping("/folders")
+            public List<FolderResponseDto> getFolders(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+                return folderService.getFolders(userDetails.getUser());
+            }
+            ```
+            
+    2. 관심 상품에 폴더 추가
+        - **ProductController**
+            
+            ```java
+            // 상품에 폴더 추가
+            @PostMapping("/products/{productId}/folder")
+            public void addFolder(
+                    @PathVariable Long productId,
+                    @RequestParam Long folderId,
+                    @AuthenticationPrincipal UserDetailsImpl userDetails
+            ) {
+                productService.addFolder(productId, folderId, userDetails.getUser());
+            }
+            ```
+            
+        - **ProductService**
+            
+            ```java
+            public void addFolder(Long productId, Long folderId, User user) {
+            
+                // 1) 상품을 조회합니다.
+                Product product = productRepository.findById(productId).orElseThrow(() ->
+                        new NullPointerException("해당 상품이 존재하지 않습니다.")
+                );
+            
+                // 2) 폴더를 조회합니다.
+                Folder folder = folderRepository.findById(folderId).orElseThrow(
+                        () -> new NullPointerException("해당 폴더가 존재하지 않습니다.")
+                );
+            
+                // 3) 조회한 폴더와 상품이 모두 로그인한 회원의 소유인지 확인합니다.
+                if (!product.getUser().getId().equals(user.getId())
+                        || !folder.getUser().getId().equals(user.getId())) {
+                    throw new IllegalArgumentException("회원님의 관심상품이 아니거나, 회원님의 폴더가 아닙니다.");
+                }
+            
+                // 중복확인
+                Optional<ProductFolder> overlapFolder = productFolderRepository.findByProductAndFolder(product, folder);
+            
+                if (overlapFolder.isPresent()) {
+                    throw new IllegalArgumentException("중복된 폴더입니다.");
+                }
+            
+                // 4) 상품에 폴더를 추가합니다.
+                productFolderRepository.save(new ProductFolder(product, folder));
+            }
+            ```
+            
+        - **ProductFolderRepository**
+            
+            ```java
+            public interface ProductFolderRepository extends JpaRepository<ProductFolder, Long> {
+                Optional<ProductFolder> findByProductAndFolder(Product product, Folder folder);
+            }
+            ```
+            
+
+## 23. 폴더 별 관심상품 조회 구현
+
+- 요구사항
+    1. 회원은 폴더 별로 관심상품 조회가 가능합니다.
+        
+        !https://s3-us-west-2.amazonaws.com/secure.notion-static.com/6de70d19-6823-4993-85ff-b49818abe09e/Untitled.png
+        
+    2. 조회 방법
+        1. '폴더별': 폴더별 저장된 관심상품들을 조회 가능합니다.
+        2. '전체': 폴더와 상관 없이 회원이 저장한 전체 관심상품들을 조회 가능합니다.
+        
+- API 설계 및 구현
+    
+    [제목 없는 데이터베이스](https://www.notion.so/c6288628f0024e07a5869cdc93ff1a2d?pvs=21)
+    
+    1. 폴더 별 관심상품 조회
+        - **ProductController**
+            
+            ```java
+            // 회원이 등록한 폴더 내 모든 상품 조회
+            @GetMapping("/folders/{folderId}/products")
+            public Page<ProductResponseDto> getProductsInFolder(
+                    @PathVariable Long folderId,
+                    @RequestParam int page,
+                    @RequestParam int size,
+                    @RequestParam String sortBy,
+                    @RequestParam boolean isAsc,
+                    @AuthenticationPrincipal UserDetailsImpl userDetails
+            ) {
+                return productService.getProductsInFolder(
+                        folderId,
+                        page-1,
+                        size,
+                        sortBy,
+                        isAsc,
+                        userDetails.getUser()
+                );
+            }
+            ```
+            
+        - **ProductService**
+            
+            ```java
+            @Transactional(readOnly = true)
+            public Page<ProductResponseDto> getProductsInFolder(Long folderId, int page, int size, String sortBy, boolean isAsc, User user) {
+            
+                // 페이징 처리
+                Sort.Direction direction = isAsc ? Sort.Direction.ASC : Sort.Direction.DESC;
+                Sort sort = Sort.by(direction, sortBy);
+                Pageable pageable = PageRequest.of(page, size, sort);
+            
+                // 해당 폴더에 등록된 상품을 가져옵니다.
+                Page<Product> products = productRepository.findAllByUserAndProductFolderList_FolderId(user, folderId, pageable);
+            
+                Page<ProductResponseDto> responseDtoList = products.map(ProductResponseDto::new);
+            
+                return responseDtoList;
+            }
+            ```
+            
+        - **ProductRepository**
+            
+            ```java
+            public interface ProductRepository extends JpaRepository<Product, Long> {
+                Page<Product> findAllByUser(User user, Pageable pageable);
+                Page<Product> findAllByUserAndProductFolderList_FolderId(User user, Long folderId, Pageable pageable);
+            }
+            ```
